@@ -16,7 +16,7 @@ async function seedUsers() {
 
   // Owner / Super Admin
   const { data: owner, error: ownerError } = await supabase.auth.admin.createUser({
-    email: 'AruthalaEDU',
+    email: 'denislapianso@gmail.com',
     password: 'Aruthala@123',
     email_confirm: true,
     user_metadata: {
