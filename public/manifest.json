@@ -1,0 +1,17 @@
+{
+  "name": "ARUS LMS",
+  "short_name": "ARUS",
+  "description": "LMS sekolah dengan ujian offline-first dan anti-cheat browser-level.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#E8F5FF",
+  "theme_color": "#0EA5E9",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
