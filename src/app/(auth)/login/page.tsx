@@ -1,75 +1,145 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Link from "next/link";
-import { createClient } from "@/utils/supabase/client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Shield, Mail, Lock, Eye, EyeOff, Globe2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClient();
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    
-    if (error) {
-      console.error("Login failed:", error.message);
-      setIsLoading(false);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const supabase = createClient();
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    if (err) {
+      setError(err.message);
+      setLoading(false);
+      return;
     }
+    router.push("/overview");
+  };
+
+  const handleGoogle = async () => {
+    const supabase = createClient();
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/overview` },
+    });
   };
 
   return (
-    <div className="w-full max-w-md">
-      <div className="flex flex-col items-center mb-8">
-        <h1 className="text-2xl font-bold text-primary">Aruthala Edu</h1>
-        <p className="text-muted-foreground mt-2">Login ke portal Anda</p>
-      </div>
-      
-      <Card className="shadow-lg border-primary/10">
-        <CardHeader>
-          <CardTitle>Masuk</CardTitle>
-          <CardDescription>Gunakan email sekolah Anda untuk masuk.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={(e) => e.preventDefault()}>
-            <div className="grid w-full items-center gap-4">
-              <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="siswa@sekolah.sch.id" disabled={isLoading} />
-              </div>
-              <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" disabled={isLoading} />
-              </div>
+    <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#f8fbff_0%,#f5f9ff_100%)] flex items-center justify-center px-4 py-10">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_17%_18%,rgba(194,220,255,0.62),transparent_30%),radial-gradient(circle_at_80%_50%,rgba(202,231,255,0.64),transparent_30%),radial-gradient(circle_at_48%_92%,rgba(255,255,255,0.98),transparent_34%)]" />
+
+      <div className="relative z-10 flex w-full max-w-[480px] flex-col items-center">
+        <div className="mb-10 text-center">
+          <div className="mx-auto mb-5 flex h-[70px] w-[70px] items-center justify-center rounded-[21px] bg-[#2f66e9] shadow-[0_12px_28px_rgba(47,102,233,0.3)]">
+            <Shield className="h-8 w-8 text-white" strokeWidth={2.1} />
+          </div>
+          <h1 className="text-[30px] font-bold leading-tight tracking-[-0.035em] text-[#1f2c43]">
+            Masuk ke Aruthala
+          </h1>
+          <p className="mt-2 text-base text-[#667a99]">Platform LMS Ujian Aman Indonesia</p>
+        </div>
+
+        <div className="w-full rounded-[25px] border border-white/80 bg-white/60 p-8 shadow-[0_24px_70px_rgba(57,111,190,0.16)] backdrop-blur-xl sm:p-9">
+          <button
+            type="button"
+            onClick={handleGoogle}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#e6edf5] bg-white/80 px-5 py-4 text-base font-semibold text-[#3c4e68] shadow-[0_2px_3px_rgba(31,58,102,0.02)] transition-colors hover:bg-white"
+          >
+            <Globe2 className="h-5 w-5 text-[#415269]" strokeWidth={2.2} />
+            Masuk dengan Google (Akun Sekolah)
+          </button>
+
+          <div className="my-6 flex items-center gap-4" aria-hidden="true">
+            <div className="h-px flex-1 bg-[#dbe5f1]" />
+            <span className="text-sm text-[#8ca0bc]">atau email</span>
+            <div className="h-px flex-1 bg-[#dbe5f1]" />
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#91a5bf]" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError("");
+                }}
+                placeholder="nama@sekolah.sch.id"
+                required
+                className="input-field-lg"
+              />
             </div>
+
+            <div className="relative">
+              <Lock className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#91a5bf]" />
+              <input
+                type={showPass ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError("");
+                }}
+                placeholder="Masukkan kata sandi"
+                required
+                className="input-field-lg pr-14"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute right-5 top-1/2 -translate-y-1/2 text-[#91a5bf] transition-colors hover:text-[#5278c9]"
+              >
+                {showPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+
+            {error && (
+              <p role="alert" className="text-sm font-medium text-[#f04444]">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !email || !password}
+              className="mt-1 w-full rounded-2xl bg-[#2f66e9] py-4 text-base font-semibold text-white shadow-[0_7px_12px_rgba(47,102,233,0.23)] transition-all hover:bg-[#285bd3] hover:shadow-[0_9px_18px_rgba(47,102,233,0.28)] active:translate-y-px disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? "Memverifikasi..." : "Masuk"}
+            </button>
           </form>
-        </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <Button className="w-full" disabled={isLoading}>Login dengan Email</Button>
-          <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
-            <svg viewBox="0 0 24 24" className="w-5 h-5 mr-2" aria-hidden="true">
-              <path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.28027 6.60998L5.27028 9.70498C6.21525 6.86002 8.87028 4.75 12.0003 4.75Z" fill="#EA4335" />
-              <path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4" />
-              <path d="M5.26498 14.2949C5.02498 13.5699 4.88501 12.7999 4.88501 11.9999C4.88501 11.1999 5.01998 10.4299 5.26498 9.7049L1.275 6.60986C0.46 8.22986 0 10.0599 0 11.9999C0 13.9399 0.46 15.7699 1.28 17.3899L5.26498 14.2949Z" fill="#FBBC05" />
-              <path d="M12.0004 24.0001C15.2404 24.0001 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C8.8704 19.245 6.21537 17.135 5.26538 14.29L1.27539 17.385C3.25539 21.31 7.3104 24.0001 12.0004 24.0001Z" fill="#34A853" />
-            </svg>
-            {isLoading ? "Mengalihkan..." : "Sign in with Google"}
-          </Button>
-        </CardFooter>
-      </Card>
-      
-      <p className="text-center text-sm text-muted-foreground mt-6">
-        Masalah saat login? <Link href="#" className="text-primary hover:underline">Hubungi admin sekolah</Link>.
-      </p>
+
+          <div className="mt-8 space-y-3 text-center text-base text-[#687b98]">
+            <p>
+              Kamu siswa?{" "}
+              <Link href="/siswa" className="font-semibold text-[#2f66e9] transition-colors hover:text-[#1c52cf]">
+                Masuk dengan NISN →
+              </Link>
+            </p>
+            <p>
+              Sekolah belum terdaftar?{" "}
+              <Link href="/register" className="font-semibold text-[#2f66e9] transition-colors hover:text-[#1c52cf]">
+                Daftar sekarang
+              </Link>
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-8 text-center text-sm text-[#8ea0bb]">
+          © 2026 Aruthala Edu · Keamanan Data UU PDP
+        </p>
+      </div>
     </div>
   );
 }
