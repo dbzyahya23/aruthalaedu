@@ -21,6 +21,7 @@ const navGroups = [
     label: "Overview",
     items: [
       { href: "/overview", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/features", label: "Fitur", icon: ClipboardList },
     ],
   },
   {
