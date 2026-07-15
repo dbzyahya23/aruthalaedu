@@ -122,9 +122,9 @@ export default function BankSoalPage() {
                   <td className="px-5 py-4 text-gray-500">{q.usage_count}×</td>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1">
-                      <button className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                      <Link href={`/bank-soal/${q.id}`} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors inline-flex items-center justify-center" aria-label={`Lihat soal ${q.id}`}>
                         <Eye className="w-3.5 h-3.5" />
-                      </button>
+                      </Link>
                       <button className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
@@ -145,11 +145,10 @@ export default function BankSoalPage() {
             {["1", "2", "3", "...", "16"].map((p) => (
               <button
                 key={p}
-                className={`w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-colors ${
-                  p === "1"
+                className={`w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-colors ${p === "1"
                     ? "bg-[#2f66e9] text-white"
                     : "text-gray-600 hover:bg-white"
-                }`}
+                  }`}
               >
                 {p}
               </button>

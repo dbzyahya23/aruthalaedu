@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { BarChart3, ArrowLeft, FileText } from "lucide-react";
+import { ArrowRight, BarChart3, ArrowLeft, ClipboardList, FileDown, FileText, GraduationCap, Users } from "lucide-react";
+
+const REPORT_ROUTES = [
+  { href: "/student-report", title: "Student Report", desc: "Ringkasan nilai, progress, dan catatan siswa.", icon: Users },
+  { href: "/teacher-report", title: "Teacher Report", desc: "Kinerja guru, pengawasan, dan aktivitas kelas.", icon: GraduationCap },
+  { href: "/exam-report", title: "Exam Report", desc: "Laporan hasil ujian, distribusi nilai, dan status submit.", icon: ClipboardList },
+  { href: "/report-export", title: "Report Export", desc: "Preview ekspor PDF / Excel untuk guru dan admin.", icon: FileDown },
+];
 
 export default function ReportsPage() {
   return (
@@ -11,7 +18,7 @@ export default function ReportsPage() {
           </div>
           <div>
             <h1 className="page-title">Laporan</h1>
-            <p className="page-subtitle">Ringkasan nilai, ujian, dan aktivitas sekolah dalam satu tempat.</p>
+            <p className="page-subtitle">Pusat laporan nilai, kehadiran, aktivitas, dan ekspor untuk backend nanti.</p>
           </div>
         </div>
 
@@ -20,25 +27,58 @@ export default function ReportsPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
-          { title: "Laporan Nilai", desc: "Ekspor ringkasan nilai per ujian dan per kelas.", value: "Siap diekspor" },
-          { title: "Laporan Kehadiran", desc: "Rekap peserta yang hadir, terlambat, atau absen.", value: "Mingguan" },
-          { title: "Laporan Aktivitas", desc: "Audit log aksi penting dari guru dan admin.", value: "Real-time" },
+          { label: "Reports", value: "4", detail: "Modul detail siap ditautkan" },
+          { label: "Export", value: "PDF/Excel", detail: "Siap untuk preview" },
+          { label: "Scope", value: "Guru/Admin", detail: "Role-aware" },
+          { label: "Status", value: "Frontend first", detail: "Backend nanti tinggal tempel" },
         ].map((item) => (
-          <div key={item.title} className="card card-padding space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-                <FileText className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">{item.title}</h2>
-                <p className="text-xs text-gray-500">{item.value}</p>
-              </div>
-            </div>
-            <p className="text-sm leading-6 text-gray-600">{item.desc}</p>
+          <div key={item.label} className="card card-padding">
+            <p className="text-sm text-gray-500 font-medium">{item.label}</p>
+            <p className="mt-2 text-3xl font-bold text-gray-900 tracking-tight">{item.value}</p>
+            <p className="mt-2 text-xs text-gray-400">{item.detail}</p>
           </div>
         ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {REPORT_ROUTES.map((route) => {
+          const Icon = route.icon;
+          return (
+            <Link key={route.href} href={route.href} className="card card-padding group hover:border-[#d8e6fb] hover:shadow-[0_22px_50px_rgba(57,111,190,0.12)] transition-all">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eef5ff] text-[#2f66e9]">
+                <Icon className="h-5 w-5" />
+              </div>
+              <h2 className="mt-4 text-base font-semibold text-gray-900">{route.title}</h2>
+              <p className="mt-1 text-sm leading-6 text-gray-500">{route.desc}</p>
+              <p className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[#2f66e9]">
+                Buka laporan <ArrowRight className="h-4 w-4" />
+              </p>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="card card-padding space-y-4">
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-amber-600" />
+          <h2 className="text-base font-semibold text-gray-900">Apa yang bisa backend sambungkan</h2>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {[
+            "Student report per kelas",
+            "Teacher report per mapel",
+            "Exam report per sesi ujian",
+            "PDF / Excel export",
+            "Filter tenant dan role",
+            "Tanggal / periode laporan",
+          ].map((item) => (
+            <div key={item} className="rounded-2xl border border-[#e3ebfa] bg-white/70 px-4 py-3 text-sm text-gray-700">
+              {item}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

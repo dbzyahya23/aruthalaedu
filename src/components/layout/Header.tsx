@@ -5,13 +5,36 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Menu, Search, Bell, ChevronRight, ChevronDown, CheckCircle2, AlertCircle } from "lucide-react";
 import { useSidebar } from "./DashboardShell";
+import { useDashboardIdentity } from "./useDashboardIdentity";
 
 const PAGE_TITLES: Record<string, string> = {
   "/overview": "Dashboard",
+  "/features": "Fitur",
+  "/teacher-hub": "Hub Guru",
+  "/student-hub": "Hub Siswa",
+  "/parent-hub": "Hub Orang Tua",
+  "/admin-hub": "Hub Admin",
   "/ujian": "Ujian",
   "/bank-soal": "Bank Soal",
   "/data-siswa": "Data Siswa",
-  "/academic": "Akademik",
+  "/student-report": "Student Report",
+  "/teacher-report": "Teacher Report",
+  "/exam-report": "Exam Report",
+  "/report-export": "Report Export",
+  "/user-management": "User Management",
+  "/class-management": "Class Management",
+  "/subject-management": "Subject Management",
+  "/academic-year": "Academic Year",
+  "/school-health": "School Health",
+  "/monitoring-center": "Monitoring Center",
+  "/incident-report": "Incident Report",
+  "/exam-health": "Exam Health",
+  "/exam-gate": "Exam Gate",
+  "/leaderboard": "Leaderboard",
+  "/library-hub": "Library Hub",
+  "/schedule": "Schedule",
+  "/notifications": "Notifications",
+  "/profile": "Profile",
   "/reports": "Laporan",
   "/settings": "Pengaturan",
 };
@@ -46,6 +69,7 @@ function getPageTitle(pathname: string): string {
 export default function Header() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useSidebar();
+  const identity = useDashboardIdentity();
   const pageTitle = getPageTitle(pathname);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -98,8 +122,8 @@ export default function Header() {
             aria-expanded={notificationOpen}
             aria-label="Notifikasi"
           >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_0_2px_rgba(255,255,255,0.9)]" />
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full shadow-[0_0_0_2px_rgba(255,255,255,0.9)]" />
           </button>
 
           {notificationOpen && (
@@ -118,7 +142,7 @@ export default function Header() {
                   return (
                     <Link
                       key={item.id}
-                      href="/overview"
+                      href="/notifications"
                       className="flex items-start gap-3 rounded-xl px-3 py-2 hover:bg-[#f6f9ff] transition-colors"
                       onClick={() => setNotificationOpen(false)}
                     >
@@ -137,13 +161,13 @@ export default function Header() {
           )}
         </div>
 
-        <button className="flex items-center gap-2 pl-1 pr-3 py-1.5 rounded-2xl hover:bg-white transition-colors">
+        <Link href="/profile" className="flex items-center gap-2 pl-1 pr-3 py-1.5 rounded-2xl hover:bg-white transition-colors">
           <div className="w-7 h-7 bg-[#2f66e9] rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-[0_8px_16px_rgba(47,102,233,0.22)]">
-            AU
+            {(identity.fullName.trim().charAt(0) || "A").toUpperCase()}
           </div>
-          <span className="text-xs font-medium text-gray-700">Admin</span>
+          <span className="text-xs font-medium text-gray-700">{identity.loading ? "Memuat role" : identity.roleLabel}</span>
           <ChevronDown className="w-3 h-3 text-gray-400" />
-        </button>
+        </Link>
       </div>
     </header>
   );
