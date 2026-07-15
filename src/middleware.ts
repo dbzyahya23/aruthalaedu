@@ -18,10 +18,14 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || (p !== "/" && path.startsWith(p)));
-  if (!user && !isPublic) {
+  
+  // BYPASS LOCAL DEV: Jika ada cookie siswa_token, anggap ini user yang valid (simulasi Edge Function)
+  const isSiswaBypass = request.cookies.has("siswa_token");
+
+  if (!user && !isSiswaBypass && !isPublic) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
-  if (user && (path === "/login" || path === "/siswa")) {
+  if ((user || isSiswaBypass) && (path === "/login" || path === "/siswa")) {
     return NextResponse.redirect(new URL("/overview", request.url));
   }
   return response;

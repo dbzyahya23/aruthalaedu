@@ -15,6 +15,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useSidebar } from "./DashboardShell";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const navGroups = [
   {
@@ -26,16 +27,16 @@ const navGroups = [
   {
     label: "Ujian",
     items: [
-      { href: "/assessment", label: "Ujian", icon: ClipboardList },
-      { href: "/library", label: "Bank Soal", icon: BookOpen },
+      { href: "/ujian", label: "Ujian", icon: ClipboardList },
+      { href: "/bank-soal", label: "Bank Soal", icon: BookOpen },
     ],
   },
   {
     label: "Manajemen",
     items: [
-      { href: "/students", label: "Data Siswa", icon: Users },
-      { href: "/academic", label: "Akademik", icon: GraduationCap },
-      { href: "/reports", label: "Laporan", icon: BarChart2 },
+      { href: "/data-siswa", label: "Data Siswa", icon: Users },
+      { href: "/akademik", label: "Akademik", icon: GraduationCap },
+      { href: "/laporan", label: "Laporan", icon: BarChart2 },
     ],
   },
   {
@@ -50,8 +51,13 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { sidebarOpen } = useSidebar();
+  const { user, isSiswa, loading } = useUserRole();
 
   const handleLogout = async () => {
+    // Bersihkan bypass lokal jika ada
+    localStorage.removeItem("aruthala_siswa_session");
+    document.cookie = "siswa_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+    
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
@@ -59,6 +65,22 @@ export default function Sidebar() {
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
+
+  // Filter menu berdasarkan role
+  const filteredNavGroups = navGroups.map(group => {
+    let filteredItems = group.items;
+    
+    if (isSiswa) {
+      // Siswa hanya boleh lihat Dashboard dan mungkin Ujian saja di masa depan, tapi sekarang kita hide semua kecuali Dashboard Ujian
+      if (group.label === "Ujian") {
+        filteredItems = group.items.filter(item => item.label === "Ujian"); // Hanya menu Ujian
+      } else if (group.label !== "Overview") {
+        filteredItems = []; // Sembunyikan Bank Soal, Data Siswa, dll
+      }
+    }
+    
+    return { ...group, items: filteredItems };
+  }).filter(group => group.items.length > 0);
 
   return (
     <aside
@@ -77,7 +99,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-        {navGroups.map((group) => (
+        {filteredNavGroups.map((group) => (
           <div key={group.label}>
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-3 mb-1">
               {group.label}
@@ -113,11 +135,11 @@ export default function Sidebar() {
       <div className="p-3 border-t border-white/80 bg-white/35">
         <div className="flex items-center gap-2.5 p-2 rounded-2xl hover:bg-white/80">
           <div className="w-8 h-8 bg-[#2f66e9] rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-[0_8px_16px_rgba(47,102,233,0.22)]">
-            AU
+            {loading ? "..." : (user?.full_name?.charAt(0).toUpperCase() || "A")}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-gray-900 truncate">Admin</p>
-            <p className="text-[10px] text-gray-400 truncate">Sekolah</p>
+            <p className="text-xs font-semibold text-gray-900 truncate">{loading ? "Memuat..." : user?.full_name}</p>
+            <p className="text-[10px] text-gray-400 truncate">{isSiswa ? `NISN: ${user?.nisn}` : "Admin Sekolah"}</p>
           </div>
           <button
             onClick={handleLogout}

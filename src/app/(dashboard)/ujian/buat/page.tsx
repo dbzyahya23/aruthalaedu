@@ -1,24 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, Shield } from "lucide-react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const STEPS = ["Info Dasar", "Pilih Soal", "Anti-Cheat", "Review & Publish"];
 
-const DUMMY_Q = [
-  { id: "1", text: "Diketahui x = 5 dan y = 3. Berapakah nilai dari x² + 2xy?", mapel: "Matematika", kelas: 9, type: "multiple_choice" },
-  { id: "2", text: "Proses fotosintesis terjadi di bagian sel tumbuhan yang disebut...?", mapel: "IPA", kelas: 7, type: "multiple_choice" },
-  { id: "3", text: "Pancasila disahkan pada tanggal 1 Juni 1945.", mapel: "PKn", kelas: 9, type: "true_false" },
-  { id: "4", text: "Jelaskan struktur teks narasi dan berikan contohnya!", mapel: "Bahasa Indonesia", kelas: 8, type: "essay" },
-  { id: "5", text: "Nilai dari sin 30° × cos 60° + tan 45° adalah...", mapel: "Matematika", kelas: 10, type: "multiple_choice" },
-];
-
 export default function BuatUjianPage() {
   const router = useRouter();
+  const { isSiswa, loading: roleLoading } = useUserRole();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [bankSoal, setBankSoal] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!roleLoading && isSiswa) {
+      router.replace("/overview");
+    }
+  }, [isSiswa, roleLoading, router]);
+
+  // Fetch bank soal
+  useEffect(() => {
+    async function fetchSoal() {
+      const supabase = createClient();
+      const { data } = await supabase.from('questions').select('*').order('created_at', { ascending: false });
+      if (data) setBankSoal(data);
+    }
+    fetchSoal();
+  }, []);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -50,7 +62,59 @@ export default function BuatUjianPage() {
 
   const handlePublish = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 1000));
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user ? user.id : 'b17a282a-6a38-4381-9dff-e8ff3865dfd8'; // Fallback to Owner UUID if not logged in
+    
+    // Dapatkan sekolah_id guru
+    let sekolahId = '22222222-2222-2222-2222-222222222222'; // fallback default
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('sekolah_id').eq('id', user.id).single();
+      if (profile?.sekolah_id) {
+        sekolahId = profile.sekolah_id;
+      }
+    }
+
+    // Format tanggal ke ISO String agar zona waktu akurat
+    const formattedStart = startAt ? new Date(startAt).toISOString() : null;
+    const formattedEnd = endAt ? new Date(endAt).toISOString() : null;
+
+    // 1. Insert Exam
+    const { data: examData, error: examError } = await supabase.from('exams').insert({
+      title: title,
+      description: "",
+      mata_pelajaran: mapel,
+      sekolah_id: sekolahId,
+      duration_minutes: duration,
+      start_at: formattedStart,
+      end_at: formattedEnd,
+      max_attempts: maxAttempts,
+      passing_score: passingScore,
+      anti_cheat_config: ac,
+      shuffle_questions: shuffleQ,
+      shuffle_options: shuffleOpts,
+      show_result_after: showResult,
+      status: 'published',
+      created_by: userId
+    }).select().single();
+
+    if (examError || !examData) {
+      console.error(examError);
+      alert("Gagal menyimpan ujian.");
+      setSaving(false); return;
+    }
+
+    // 2. Insert Exam Questions
+    if (selectedQ.length > 0) {
+      const eqPayload = selectedQ.map((qId, index) => ({
+        exam_id: examData.id,
+        question_id: qId,
+        urutan: index + 1,
+        bobot: 1
+      }));
+      await supabase.from('exam_questions').insert(eqPayload);
+    }
+
     setSaving(false);
     router.push("/ujian");
   };
@@ -114,11 +178,11 @@ export default function BuatUjianPage() {
                   </div>
                   <div>
                     <label style={{ fontSize: 12, color: "var(--t3)", display: "block", marginBottom: 6 }}>Waktu Mulai</label>
-                    <input type="datetime-local" value={startAt} onChange={e => setStartAt(e.target.value)} style={{ ...inp, colorScheme: "dark" }} />
+                    <input type="datetime-local" value={startAt} onChange={e => setStartAt(e.target.value)} style={inp} />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, color: "var(--t3)", display: "block", marginBottom: 6 }}>Waktu Selesai</label>
-                    <input type="datetime-local" value={endAt} onChange={e => setEndAt(e.target.value)} style={{ ...inp, colorScheme: "dark" }} />
+                    <input type="datetime-local" value={endAt} onChange={e => setEndAt(e.target.value)} style={inp} />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, color: "var(--t3)", display: "block", marginBottom: 6 }}>Maks. Percobaan</label>
@@ -165,7 +229,7 @@ export default function BuatUjianPage() {
               <span style={{ fontSize: 13, color: "var(--accent)" }}>{selectedQ.length} dipilih</span>
             </div>
             <div className="space-y-2">
-              {DUMMY_Q.map(q => (
+              {bankSoal.map(q => (
                 <div key={q.id} onClick={() => toggleQ(q.id)}
                   className="flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all"
                   style={{ background: selectedQ.includes(q.id) ? "var(--accent-dim)" : "rgba(255,255,255,0.02)", border: `1px solid ${selectedQ.includes(q.id) ? "var(--border-a)" : "var(--border)"}` }}>
@@ -174,11 +238,14 @@ export default function BuatUjianPage() {
                     {selectedQ.includes(q.id) && <Check size={11} color="white" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div style={{ fontSize: 13, color: "var(--t1)", marginBottom: 3 }}>{q.text}</div>
-                    <div style={{ fontSize: 11, color: "var(--t3)" }}>{q.mapel} · Kelas {q.kelas} · {q.type === "multiple_choice" ? "PG" : q.type === "essay" ? "Esai" : "B/S"}</div>
+                    <div style={{ fontSize: 13, color: "var(--t1)", marginBottom: 3 }}>{q.content?.text || "(tanpa teks)"}</div>
+                    <div style={{ fontSize: 11, color: "var(--t3)" }}>{q.mata_pelajaran} · Kelas {q.tingkat} · {q.type}</div>
                   </div>
                 </div>
               ))}
+              {bankSoal.length === 0 && (
+                <div className="text-center py-6 text-sm" style={{ color: "var(--t3)" }}>Belum ada soal di Bank Soal.</div>
+              )}
             </div>
           </div>
         )}

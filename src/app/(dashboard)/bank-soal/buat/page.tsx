@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Trash2, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { useUserRole } from "@/hooks/useUserRole";
 
 type QuestionType = "multiple_choice" | "essay" | "true_false" | "fill_blank";
 
@@ -11,8 +13,15 @@ interface Option { id: string; text: string; is_correct: boolean; }
 
 export default function BuatSoalPage() {
   const router = useRouter();
+  const { isSiswa, loading: roleLoading } = useUserRole();
   const [type, setType] = useState<QuestionType>("multiple_choice");
   const [text, setText] = useState("");
+  
+  useEffect(() => {
+    if (!roleLoading && isSiswa) {
+      router.replace("/overview");
+    }
+  }, [isSiswa, roleLoading, router]);
   const [options, setOptions] = useState<Option[]>([
     { id: "a", text: "", is_correct: false },
     { id: "b", text: "", is_correct: false },
@@ -52,9 +61,33 @@ export default function BuatSoalPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 800));
+    const supabase = createClient();
+    
+    // Get current user id
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user ? user.id : 'b17a282a-6a38-4381-9dff-e8ff3865dfd8'; // Fallback to Owner UUID if not logged in
+
+    const { error } = await supabase.from('questions').insert({
+      type: type,
+      content: { text, options, explanation },
+      mata_pelajaran: mapel || 'Umum',
+      tingkat: parseInt(tingkat) || 9,
+      jenjang: 'SMP',
+      topik: topik || 'Umum',
+      kurikulum: kurikulum,
+      difficulty: difficulty,
+      tags: [],
+      scope: scope,
+      created_by: userId
+    });
+
     setSaving(false);
-    router.push("/bank-soal");
+    if (error) {
+      console.error(error);
+      alert("Gagal menyimpan soal: " + error.message);
+    } else {
+      router.push("/bank-soal");
+    }
   };
 
   const inputStyle = {

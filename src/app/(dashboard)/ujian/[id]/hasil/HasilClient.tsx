@@ -1,19 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Download, AlertTriangle, CheckCircle, XCircle, BarChart2 } from "lucide-react";
 import Link from "next/link";
-
-const RESULTS = [
-  { id:"1", nama:"Budi Santoso", nisn:"1234567890", score:85, max:100, time:4320, violations:0, flagged:false, status:"submitted" },
-  { id:"2", nama:"Ani Rahayu", nisn:"1234567891", score:92, max:100, time:3800, violations:2, flagged:false, status:"submitted" },
-  { id:"3", nama:"Candra Putra", nisn:"1234567892", score:68, max:100, time:5100, violations:5, flagged:true, status:"submitted" },
-  { id:"4", nama:"Dewi Lestari", nisn:"1234567893", score:76, max:100, time:4500, violations:1, flagged:false, status:"submitted" },
-  { id:"5", nama:"Eko Prasetyo", nisn:"1234567894", score:null, max:100, time:null, violations:0, flagged:false, status:"not_started" },
-  { id:"6", nama:"Fira Amelia", nisn:"1234567895", score:88, max:100, time:4100, violations:0, flagged:false, status:"submitted" },
-  { id:"7", nama:"Gilang Ramadan", nisn:"1234567896", score:95, max:100, time:3500, violations:0, flagged:false, status:"submitted" },
-  { id:"8", nama:"Hana Putri", nisn:"1234567897", score:45, max:100, time:5400, violations:8, flagged:true, status:"submitted" },
-];
+import { createSafeClient } from "@/lib/supabase/client";
 
 const PASSING = 70;
 
@@ -25,23 +15,165 @@ function formatTime(s: number | null) {
 
 export default function HasilClient({ examId }: { examId: string }) {
   const [sort, setSort] = useState<"score"|"name"|"time">("score");
+  const [results, setResults] = useState<any[]>([]);
+  const [examInfo, setExamInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const sorted = [...RESULTS].sort((a, b) => {
+  useEffect(() => {
+    async function fetchData() {
+      const supabase = createSafeClient();
+      if (!supabase) return;
+
+      const { data: examData } = await supabase.from('exams').select('title, duration_minutes').eq('id', examId).single();
+      if (examData) setExamInfo(examData);
+
+      // Fetch sessions and profiles
+      const { data: sessionData } = await supabase
+        .from('exam_sessions')
+        .select(`
+          id,
+          status,
+          time_remaining,
+          violation_count,
+          is_flagged,
+          score,
+          profiles(full_name, nisn)
+        `)
+        .eq('exam_id', examId);
+
+      if (sessionData) {
+        const formatted = sessionData.map((s: any) => ({
+          id: s.id,
+          nama: s.profiles?.full_name || "Siswa Tidak Diketahui",
+          nisn: s.profiles?.nisn || "-",
+          score: s.score !== null && s.score !== undefined ? s.score : null,
+          max: 100, // standard out of 100
+          time: s.time_remaining !== null && examData ? (examData.duration_minutes * 60) - s.time_remaining : null,
+          violations: s.violation_count || 0,
+          flagged: s.is_flagged || false,
+          status: s.status,
+        }));
+        setResults(formatted);
+      }
+      setLoading(false);
+    }
+    fetchData();
+  }, [examId]);
+
+  const sorted = [...results].sort((a, b) => {
     if (sort === "score") return (b.score ?? -1) - (a.score ?? -1);
     if (sort === "name") return a.nama.localeCompare(b.nama);
     if (sort === "time") return (a.time ?? 9999) - (b.time ?? 9999);
     return 0;
   });
 
-  const submitted = RESULTS.filter(r => r.status === "submitted");
+  const submitted = results.filter(r => r.status === "submitted");
   const scores = submitted.filter(r => r.score !== null).map(r => r.score as number);
   const avg = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : 0;
   const lulus = scores.filter(s => s >= PASSING).length;
-  const flaggedCount = RESULTS.filter(r => r.flagged).length;
+  const flaggedCount = results.filter(r => r.flagged).length;
 
   const handleExport = async () => {
-    const { exportResultsToExcel } = await import("@/lib/export/excel-export");
-    alert("Export Excel sedang disiapkan...");
+    if (results.length === 0) {
+      alert("Tidak ada data untuk diekspor.");
+      return;
+    }
+
+    try {
+      const XLSX = await import("xlsx");
+      const exportData = sorted.map((r, i) => ({
+        No: i + 1,
+        Nama: r.nama,
+        NISN: r.nisn,
+        Nilai: r.score !== null ? r.score : "Belum dinilai",
+        Status: r.status === "submitted" ? "Selesai" : r.status === "in_progress" ? "Mengerjakan" : "Belum Mulai",
+        "Sisa Waktu": formatTime(r.time),
+        "Pelanggaran (Anti-Cheat)": r.violations,
+        "Dicurigai": r.flagged ? "Ya" : "Tidak"
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Hasil Ujian");
+      
+      const fileName = `Hasil_Ujian_${examInfo?.title || 'Data'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (error) {
+      console.error(error);
+      alert("Gagal mengekspor data ke Excel.");
+    }
+  };
+
+  const [calculating, setCalculating] = useState(false);
+
+  const handleCalculate = async () => {
+    setCalculating(true);
+    const supabase = createSafeClient();
+    if (!supabase) return;
+
+    // 1. Dapatkan daftar pertanyaan untuk ujian ini
+    const { data: eq } = await supabase.from('exam_questions').select('question_id').eq('exam_id', examId);
+    if (!eq || eq.length === 0) { setCalculating(false); return; }
+    
+    const qIds = eq.map((x: any) => x.question_id);
+    const { data: qs } = await supabase.from('questions').select('id, type, content').in('id', qIds);
+    if (!qs) { setCalculating(false); return; }
+
+    // Peta jawaban benar
+    const correctMap: Record<string, string | boolean> = {};
+    qs.forEach((q: any) => {
+      if (q.type === 'multiple_choice' && q.content?.options) {
+        const correctOpt = q.content.options.find((o: any) => o.is_correct);
+        if (correctOpt) correctMap[q.id] = correctOpt.id;
+      } else if (q.type === 'true_false' && q.content?.correct_answer !== undefined) {
+        correctMap[q.id] = q.content.correct_answer;
+      }
+    });
+
+    const totalQuestions = qs.length;
+
+    // 2. Dapatkan sesi submitted yang score-nya masih null
+    const sessionsToGrade = results.filter(r => r.status === "submitted" && r.score === null);
+    if (sessionsToGrade.length === 0) {
+      alert("Tidak ada sesi ujian baru yang perlu dinilai.");
+      setCalculating(false);
+      return;
+    }
+
+    const sessionIds = sessionsToGrade.map(s => s.id);
+
+    // 3. Ambil jawaban siswa
+    const { data: answersData } = await supabase
+      .from('exam_answers')
+      .select('session_id, question_id, answer_value')
+      .in('session_id', sessionIds);
+
+    const answers = answersData || [];
+
+    // 4. Hitung nilai per sesi
+    for (const sessionId of sessionIds) {
+      const sessionAnswers = answers.filter((a: any) => a.session_id === sessionId);
+      let correctCount = 0;
+
+      sessionAnswers.forEach((ans: any) => {
+        const correctAns = correctMap[ans.question_id];
+        // Pastikan tipe data sama saat membandingkan
+        if (correctAns !== undefined && String(ans.answer_value) === String(correctAns)) {
+          correctCount++;
+        }
+      });
+
+      const finalScore = Math.round((correctCount / totalQuestions) * 100);
+
+      // Simpan ke database
+      await supabase.from('exam_sessions').update({ score: finalScore }).eq('id', sessionId);
+      
+      // Update state lokal agar langsung terlihat
+      setResults(prev => prev.map(r => r.id === sessionId ? { ...r, score: finalScore } : r));
+    }
+
+    setCalculating(false);
+    alert(`Berhasil menilai ${sessionsToGrade.length} ujian secara otomatis.`);
   };
 
   return (
@@ -54,23 +186,30 @@ export default function HasilClient({ examId }: { examId: string }) {
           </Link>
           <div>
             <h1 style={{ fontFamily:"var(--fd)",fontSize:22,fontWeight:700 }}>Hasil Ujian</h1>
-            <p style={{ fontSize:13,color:"var(--t2)" }}>UTS Matematika Kelas 9A · KKM {PASSING}</p>
+            <p style={{ fontSize:13,color:"var(--t2)" }}>{examInfo?.title || "Memuat..."} · KKM {PASSING}</p>
           </div>
         </div>
-        <button onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
-          style={{ background:"var(--surface)",border:"1px solid var(--border)",color:"var(--t1)" }}>
-          <Download size={15} /> Export Excel
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleCalculate} disabled={calculating}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
+            style={{ background:"var(--accent)",color:"#fff", opacity: calculating ? 0.7 : 1 }}>
+            {calculating ? "Menilai..." : "Hitung Nilai Otomatis"}
+          </button>
+          <button onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
+            style={{ background:"var(--surface)",border:"1px solid var(--border)",color:"var(--t1)" }}>
+            <Download size={15} /> Export Excel
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label:"Rata-rata Nilai", val:avg.toFixed(1), color:"var(--accent)", bg:"var(--accent-dim)", icon:BarChart2 },
-          { label:"Lulus KKM", val:`${lulus}/${submitted.length}`, color:"var(--green)", bg:"var(--green-dim)", icon:CheckCircle },
-          { label:"Belum Submit", val:`${RESULTS.length - submitted.length}`, color:"var(--amber)", bg:"var(--amber-dim)", icon:XCircle },
-          { label:"Siswa Dicurigai", val:`${flaggedCount}`, color:"var(--red)", bg:"rgba(239,68,68,0.1)", icon:AlertTriangle },
+          { label:"Rata-rata Nilai", val:loading ? "-" : avg.toFixed(1), color:"var(--accent)", bg:"var(--accent-dim)", icon:BarChart2 },
+          { label:"Lulus KKM", val:loading ? "-" : `${lulus}/${submitted.length}`, color:"var(--green)", bg:"var(--green-dim)", icon:CheckCircle },
+          { label:"Belum Submit", val:loading ? "-" : `${results.length - submitted.length}`, color:"var(--amber)", bg:"var(--amber-dim)", icon:XCircle },
+          { label:"Siswa Dicurigai", val:loading ? "-" : `${flaggedCount}`, color:"var(--red)", bg:"rgba(239,68,68,0.1)", icon:AlertTriangle },
         ].map(({ label,val,color,bg,icon:Icon }) => (
           <div key={label} className="p-4 rounded-xl" style={{ background:"var(--surface)",border:"1px solid var(--border)" }}>
             <div className="flex items-center justify-between mb-2">
@@ -130,7 +269,11 @@ export default function HasilClient({ examId }: { examId: string }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r, i) => {
+            {loading ? (
+              <tr><td colSpan={8} className="text-center py-10" style={{ color: "var(--t3)" }}>Memuat hasil ujian...</td></tr>
+            ) : results.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-10" style={{ color: "var(--t3)" }}>Belum ada hasil ujian.</td></tr>
+            ) : sorted.map((r, i) => {
               const isLulus = r.score !== null && r.score >= PASSING;
               return (
                 <tr key={r.id} style={{ borderBottom:"1px solid var(--border)", background: r.flagged ? "rgba(245,158,11,0.04)" : "transparent" }}>
@@ -152,6 +295,10 @@ export default function HasilClient({ examId }: { examId: string }) {
                   <td className="px-5 py-3.5">
                     {r.status === "not_started" ? (
                       <span style={{ fontSize:12,color:"var(--t3)" }}>Belum mulai</span>
+                    ) : r.status === "in_progress" ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs" style={{ background:"var(--accent-dim)", color:"var(--accent)" }}>
+                        Mengerjakan
+                      </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-full text-xs" style={{ background:isLulus?"var(--green-dim)":"var(--red-dim,rgba(239,68,68,0.1))", color:isLulus?"#6EE7B7":"#FCA5A5" }}>
                         {isLulus ? "Lulus" : "Tidak Lulus"}

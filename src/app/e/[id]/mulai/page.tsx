@@ -1,30 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Shield, WifiOff, AlertTriangle, CheckCircle } from "lucide-react";
+import { Shield, WifiOff, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { ExamAntiCheat } from "@/lib/exam/anti-cheat";
 import { saveAnswer } from "@/lib/exam/offline-storage";
 import { SyncManager } from "@/lib/exam/sync-manager";
 import { formatSeconds } from "@/lib/utils";
 
-const EXAM_DATA = {
-  session_id: "demo-session-001",
-  exam_title: "UTS Matematika Kelas 9A",
-  total_questions: 5,
-  duration_seconds: 5400,
-  anti_cheat_config: {
-    fullscreen: true, tab_blur: true, clipboard: true,
-    keyboard_shortcuts: true, right_click: true, screen_share: false,
-    max_fullscreen_exits: 3, max_tab_blurs: 5, require_seb: false,
-  },
-  questions: [
-    { id:"q1", type:"multiple_choice", content:{ text:"Diketahui x = 5 dan y = 3. Berapakah nilai dari <strong>x² + 2xy</strong>?", options:[{id:"a",text:"34"},{id:"b",text:"43"},{id:"c",text:"25"},{id:"d",text:"55"}] }},
-    { id:"q2", type:"multiple_choice", content:{ text:"Jika 2x + 4 = 14, maka nilai x adalah...", options:[{id:"a",text:"3"},{id:"b",text:"4"},{id:"c",text:"5"},{id:"d",text:"7"}] }},
-    { id:"q3", type:"true_false", content:{ text:"Bilangan π (pi) adalah bilangan rasional." }},
-    { id:"q4", type:"multiple_choice", content:{ text:"Hasil dari 3³ + 4² adalah...", options:[{id:"a",text:"43"},{id:"b",text:"37"},{id:"c",text:"25"},{id:"d",text:"91"}] }},
-    { id:"q5", type:"essay", content:{ text:"Jelaskan perbedaan antara bilangan prima dan bilangan komposit! Berikan masing-masing 3 contoh." }},
-  ],
-};
+import { createClient } from "@/lib/supabase/client";
+import { useSearchParams } from "next/navigation";
 
 type AnswerVal = string | boolean | null;
 
@@ -36,15 +20,26 @@ const CSS = `
   textarea,input{user-select:text;-webkit-user-select:text;}
 `;
 
+import { Suspense } from "react";
+
 export default function ExamRoomPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white" style={{background: "var(--bg)"}}>Memuat Ujian...</div>}>
+      <ExamRoomClient params={params} />
+    </Suspense>
+  );
+}
+
+function ExamRoomClient({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState<string | null>(null);
+  const nextSearchParams = useSearchParams();
+  const sessionId = nextSearchParams.get('session');
+  
+  const [examData, setExamData] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerVal>>({});
   const [idx, setIdx] = useState(0);
 
-  useEffect(() => {
-    params.then(({ id }) => setId(id));
-  }, [params]);
-  const [timeLeft, setTimeLeft] = useState(EXAM_DATA.duration_seconds);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [lockReason, setLockReason] = useState("");
   const [isOffline, setIsOffline] = useState(false);
@@ -55,13 +50,52 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
   const syncRef = useRef<SyncManager | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const q = EXAM_DATA.questions[idx];
-  const answered = Object.keys(answers).length;
-  const totalV = Object.values(violations).reduce((a, b) => a + b, 0);
-  const pct = timeLeft / EXAM_DATA.duration_seconds;
-  const timerColor = timeLeft < 300 ? "var(--red)" : timeLeft < 900 ? "var(--amber)" : "var(--green)";
-
   useEffect(() => {
+    params.then(({ id }) => {
+      setId(id);
+      fetchExamData(id);
+    });
+  }, [params]);
+
+  async function fetchExamData(examId: string) {
+    if (!sessionId) return;
+    const supabase = createClient();
+    
+    // Fetch exam
+    const { data: exam } = await supabase.from('exams').select('*').eq('id', examId).single();
+    if (!exam) return;
+
+    // Fetch exam_questions
+    const { data: eq } = await supabase.from('exam_questions').select('question_id, urutan').eq('exam_id', examId).order('urutan', { ascending: true });
+    if (!eq || eq.length === 0) return;
+    const qIds = eq.map(x => x.question_id);
+    
+    // Fetch questions
+    const { data: qs } = await supabase.from('questions').select('*').in('id', qIds);
+    if (!qs) return;
+
+    // Sort questions to match exam_questions.urutan
+    const sortedQs = [];
+    for (const id of qIds) {
+      const q = qs.find(x => x.id === id);
+      if (q) sortedQs.push(q);
+    }
+
+    const data = {
+      session_id: sessionId,
+      exam_title: exam.title,
+      total_questions: sortedQs.length,
+      duration_seconds: exam.duration_minutes * 60,
+      anti_cheat_config: exam.anti_cheat_config || { fullscreen: false, tab_blur: false },
+      questions: sortedQs
+    };
+
+    setExamData(data);
+    setTimeLeft(data.duration_seconds);
+    initExam(data);
+  }
+
+  function initExam(data: any) {
     const goOnline = () => setIsOffline(false);
     const goOffline = () => setIsOffline(true);
     window.addEventListener("online", goOnline);
@@ -69,8 +103,8 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
     setIsOffline(!navigator.onLine);
 
     const ac = new ExamAntiCheat({
-      sessionId: EXAM_DATA.session_id,
-      config: EXAM_DATA.anti_cheat_config,
+      sessionId: data.session_id,
+      config: data.anti_cheat_config,
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
       anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
       token: typeof window !== "undefined" ? (sessionStorage.getItem("siswa_token") ?? "") : "",
@@ -82,7 +116,7 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
     acRef.current = ac;
 
     const sync = new SyncManager({
-      sessionId: EXAM_DATA.session_id,
+      sessionId: data.session_id,
       supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
       token: typeof window !== "undefined" ? (sessionStorage.getItem("siswa_token") ?? "") : "",
       anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
@@ -98,29 +132,69 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
         return t - 1;
       });
     }, 1000);
+  }
 
+  useEffect(() => {
     return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-      ac.destroy();
-      sync.stop();
+      if (acRef.current) acRef.current.destroy();
+      if (syncRef.current) syncRef.current.stop();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const doSubmit = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
     acRef.current?.destroy();
     await syncRef.current?.flushAll();
+    
+    // Kalkulasi Skor
+    let correctCount = 0;
+    if (examData && examData.questions) {
+      examData.questions.forEach((q: any) => {
+        const studentAns = answers[q.id];
+        if (q.type === 'multiple_choice' && q.content?.options) {
+           const correctOpt = q.content.options.find((o: any) => o.is_correct);
+           if (correctOpt && studentAns === correctOpt.id) {
+             correctCount++;
+           }
+        } else if (q.type === 'true_false' && q.content?.correct_answer !== undefined) {
+           if (studentAns === q.content.correct_answer) {
+             correctCount++;
+           }
+        }
+      });
+    }
+    const finalScore = examData?.total_questions ? Math.round((correctCount / examData.total_questions) * 100) : 0;
+
+    // Update session status in Supabase
+    if (sessionId) {
+      const supabase = createClient();
+      await supabase.from('exam_sessions').update({
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+        time_remaining: timeLeft,
+        score: finalScore
+      }).eq('id', sessionId);
+    }
+
     if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch {} }
     setSubmitted(true);
-  }, []);
+  }, [sessionId, timeLeft, examData, answers]);
 
   const setAnswer = useCallback((qid: string, val: AnswerVal) => {
     setAnswers(prev => ({ ...prev, [qid]: val }));
-    saveAnswer(EXAM_DATA.session_id, qid, val as unknown as Record<string, unknown>);
-  }, []);
+    if (examData) {
+      saveAnswer(examData.session_id, qid, val as unknown as Record<string, unknown>);
+    }
+  }, [examData]);
+
+  if (!examData) return <div className="min-h-screen flex items-center justify-center text-white" style={{background: "var(--bg)"}}>Memuat Soal Ujian...</div>;
+
+  const q = examData.questions[idx];
+  const answered = Object.keys(answers).length;
+  const totalV = Object.values(violations).reduce((a, b) => a + b, 0);
+  const pct = timeLeft / examData.duration_seconds;
+  const timerColor = timeLeft < 300 ? "var(--red)" : timeLeft < 900 ? "var(--amber)" : "var(--green)";
 
   const unlockFullscreen = async () => {
     try {
@@ -142,16 +216,20 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
         </div>
         <h1 style={{ fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:800,marginBottom:10 }}>Ujian Selesai!</h1>
         <p style={{ color:"var(--t2)",fontSize:15,marginBottom:28,lineHeight:1.7 }}>Jawabanmu sudah berhasil dikumpulkan. Hasil akan diumumkan oleh guru.</p>
-        <div style={{ background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,textAlign:"left" }}>
+        <div style={{ background:"var(--surface)",border:"1px solid var(--border)",borderRadius:14,padding:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,textAlign:"left",marginBottom:24 }}>
           {[
-            { l:"Soal Dijawab", v:`${answered}/${EXAM_DATA.total_questions}`, c:"var(--t1)" },
+            { l:"Soal Dijawab", v:`${answered}/${examData.total_questions}`, c:"var(--t1)" },
             { l:"Pelanggaran", v:totalV.toString(), c:totalV>0?"var(--amber)":"var(--green)" },
-            { l:"Waktu Digunakan", v:formatSeconds(EXAM_DATA.duration_seconds-timeLeft), c:"var(--t1)" },
+            { l:"Waktu Digunakan", v:formatSeconds(examData.duration_seconds-timeLeft), c:"var(--t1)" },
             { l:"Sinkronisasi", v:syncOk?"✓ Tersimpan":"⚠ Cek koneksi", c:syncOk?"var(--green)":"var(--amber)" },
           ].map(({ l,v,c }) => (
             <div key={l}><div style={{ fontSize:11,color:"var(--t3)",marginBottom:4 }}>{l}</div><div style={{ fontFamily:"Syne,sans-serif",fontWeight:700,color:c }}>{v}</div></div>
           ))}
         </div>
+        <button onClick={() => window.location.href = "/overview"}
+          style={{ width:"100%",padding:"14px",borderRadius:12,background:"var(--accent)",color:"#fff",border:"none",cursor:"pointer",fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,transition:"all .2s" }}>
+          Kembali ke Dashboard
+        </button>
       </div>
     </div>
   );
@@ -179,48 +257,20 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
 
       {/* HEADER */}
       <header style={{ height:56,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px",background:"var(--surface)",borderBottom:"1px solid var(--border)",flexShrink:0 }}>
-        {/* Left: brand + title */}
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <Shield size={15} color="var(--accent)" />
-          <span style={{ fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:600,color:"var(--t2)" }}>{EXAM_DATA.exam_title}</span>
-        </div>
-
-        {/* Center: progress bar */}
-        <div style={{ display:"flex",alignItems:"center",gap:10,position:"absolute",left:"50%",transform:"translateX(-50%)" }}>
-          <span style={{ fontSize:12,color:"var(--t3)" }}>Soal {idx+1}/{EXAM_DATA.total_questions}</span>
-          <div style={{ width:100,height:4,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden" }}>
-            <div style={{ height:"100%",width:`${((idx+1)/EXAM_DATA.total_questions)*100}%`,background:"var(--accent)",transition:"width .3s" }} />
+        <div style={{ display:"flex",alignItems:"center",gap:16 }}>
+          <span style={{ fontFamily:"Syne,sans-serif",fontSize:13,fontWeight:600,color:"var(--t2)" }}>{examData.exam_title}</span>
+          <div style={{ width:1,height:14,background:"var(--border)" }} />
+          <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+            <Clock size={14} color={timerColor} />
+            <span style={{ fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,color:timerColor,fontVariantNumeric:"tabular-nums" }}>{formatSeconds(timeLeft)}</span>
           </div>
-          <span style={{ fontSize:12,color:"var(--t3)" }}>{answered} dijawab</span>
         </div>
-
-        {/* Right: status + timer */}
-        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          {isOffline && (
-            <span style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:100,fontSize:11,fontWeight:500,background:"var(--amber-dim)",border:"1px solid rgba(245,158,11,.3)",color:"#FDE68A" }}>
-              <WifiOff size={10} /> Offline — Aman
-            </span>
-          )}
-          {!isOffline && (
-            <div style={{ width:6,height:6,borderRadius:"50%",background:syncOk?"var(--green)":"var(--amber)" }} />
-          )}
-          {totalV > 0 && (
-            <span style={{ display:"flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:100,fontSize:11,background:"var(--amber-dim)",color:"#FDE68A",border:"1px solid rgba(245,158,11,.3)" }}>
-              <AlertTriangle size={10} /> {totalV}×
-            </span>
-          )}
-          {/* Circular timer */}
-          <div style={{ display:"flex",alignItems:"center",gap:8,padding:"5px 12px",borderRadius:8,background:"rgba(255,255,255,0.05)",border:"1px solid var(--border)" }}>
-            <svg width="28" height="28" viewBox="0 0 28 28" style={{ transform:"rotate(-90deg)" }}>
-              <circle cx="14" cy="14" r="11" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
-              <circle cx="14" cy="14" r="11" fill="none" stroke={timerColor} strokeWidth="2.5"
-                strokeDasharray={`${2*Math.PI*11}`} strokeDashoffset={`${2*Math.PI*11*(1-pct)}`}
-                style={{ transition:"stroke-dashoffset 1s linear,stroke .5s" }} strokeLinecap="round" />
-            </svg>
-            <span style={{ fontFamily:"Syne,sans-serif",fontSize:14,fontWeight:700,color:timerColor,minWidth:48,letterSpacing:.5 }}>
-              {formatSeconds(timeLeft)}
-            </span>
+        <div style={{ display:"flex",alignItems:"center",gap:16 }}>
+          <span style={{ fontSize:12,color:"var(--t3)" }}>Soal {idx+1}/{examData.total_questions}</span>
+          <div style={{ width:120,height:6,borderRadius:3,background:"var(--surface)",overflow:"hidden" }}>
+            <div style={{ height:"100%",width:`${((idx+1)/examData.total_questions)*100}%`,background:"var(--accent)",transition:"width .3s" }} />
           </div>
+          <button onClick={doSubmit} style={{ padding:"6px 14px",borderRadius:6,background:"var(--accent)",color:"#fff",fontSize:12,fontWeight:600,border:"none",cursor:"pointer" }}>Selesai</button>
         </div>
       </header>
 
@@ -230,14 +280,14 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
 
           {/* Question card */}
           <div style={{ background:"var(--surface)",border:"1px solid var(--border)",borderRadius:20,padding:32,marginBottom:20 }}>
-            <div style={{ fontSize:11,color:"var(--t3)",textTransform:"uppercase",letterSpacing:1,marginBottom:12 }}>
-              Soal {idx+1} dari {EXAM_DATA.total_questions}
+            <div style={{ fontSize:12,fontWeight:600,color:"var(--t2)",marginBottom:12 }}>
+              Soal {idx+1} dari {examData.total_questions}
             </div>
             <div style={{ fontSize:16,lineHeight:1.75,marginBottom:24 }}
               dangerouslySetInnerHTML={{ __html: q.content.text }} />
 
             {/* Multiple Choice */}
-            {q.type === "multiple_choice" && (q.content.options ?? []).map((opt) => {
+            {q.type === "multiple_choice" && (q.content.options ?? []).map((opt: any) => {
               const sel = answers[q.id] === opt.id;
               return (
                 <button type="button" key={opt.id} onClick={() => setAnswer(q.id, opt.id)}
@@ -276,36 +326,32 @@ export default function ExamRoomPage({ params }: { params: Promise<{ id: string 
           </div>
 
           {/* Navigation */}
-          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-            <button type="button" onClick={() => setIdx(i => Math.max(0,i-1))} disabled={idx===0}
-              style={{ padding:"10px 20px",borderRadius:12,background:"transparent",border:"1px solid var(--border)",color:"var(--t2)",cursor:idx===0?"not-allowed":"pointer",opacity:idx===0?0.4:1,fontFamily:"inherit",fontSize:14 }}>
-              ← Sebelumnya
-            </button>
-
-            {/* Dot navigator */}
-            <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center",maxWidth:240 }}>
-              {EXAM_DATA.questions.map((sq, i) => {
-                const ans = answers[sq.id];
-                const done = ans !== undefined && ans !== null && ans !== "";
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(40px,1fr))",gap:8 }}>
+              {examData.questions.map((sq: any, i: number) => {
+                const isAns = answers[sq.id] !== undefined;
+                const isCur = idx === i;
                 return (
-                  <button type="button" key={sq.id} onClick={() => setIdx(i)}
-                    style={{ width:28,height:28,borderRadius:8,fontSize:12,fontWeight:700,background:i===idx?"var(--accent)":done?"var(--green-dim)":"rgba(255,255,255,0.05)",border:`1px solid ${i===idx?"var(--accent)":done?"rgba(16,185,129,.3)":"var(--border)"}`,color:i===idx?"#fff":done?"#6EE7B7":"var(--t3)",cursor:"pointer",fontFamily:"inherit",transition:"all .13s" }}>
+                  <button key={sq.id} onClick={() => setIdx(i)}
+                    style={{ aspectRatio:"1",borderRadius:8,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .2s",
+                      background:isCur?"var(--accent)":isAns?"var(--accent-dim)":"transparent",
+                      border:`1px solid ${isCur?"var(--accent)":isAns?"var(--border-a)":"var(--border)"}`,
+                      color:isCur?"#fff":isAns?"var(--accent)":"var(--t2)" }}>
                     {i+1}
                   </button>
                 );
               })}
             </div>
-
-            {idx < EXAM_DATA.total_questions - 1 ? (
-              <button type="button" onClick={() => setIdx(i => i+1)}
-                style={{ padding:"10px 20px",borderRadius:12,background:"var(--accent)",border:"none",color:"#fff",cursor:"pointer",fontFamily:"inherit",fontSize:14 }}>
-                Berikutnya →
-              </button>
+          </div>
+          
+          <div style={{ display:"flex",gap:12 }}>
+            {idx > 0 && (
+              <button type="button" onClick={()=>setIdx(i => Math.max(0, i-1))} style={{ flex:1,padding:"12px",borderRadius:8,background:"var(--surface)",border:"1px solid var(--border)",color:"var(--t2)",fontSize:13,fontWeight:600,cursor:"pointer" }}>Sebelumnya</button>
+            )}
+            {idx < examData.total_questions - 1 ? (
+              <button type="button" onClick={()=>setIdx(i => i+1)} style={{ flex:1,padding:"12px",borderRadius:8,background:"var(--accent)",border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer" }}>Selanjutnya</button>
             ) : (
-              <button type="button" onClick={doSubmit}
-                style={{ padding:"10px 20px",borderRadius:12,background:"var(--green)",border:"none",color:"#fff",cursor:"pointer",fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14 }}>
-                ✓ Kumpulkan
-              </button>
+              <button type="button" onClick={doSubmit} style={{ flex:1,padding:"12px",borderRadius:8,background:"var(--green)",border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer" }}>Kumpulkan</button>
             )}
           </div>
         </div>

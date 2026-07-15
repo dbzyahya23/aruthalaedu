@@ -3,18 +3,16 @@
 import { usePathname } from "next/navigation";
 import { Menu, Search, Bell, ChevronRight, ChevronDown } from "lucide-react";
 import { useSidebar } from "./DashboardShell";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const PAGE_TITLES: Record<string, string> = {
   "/overview": "Dashboard",
-  "/assessment": "Ujian",
-  "/library": "Bank Soal",
-  "/students": "Data Siswa",
-  "/academic": "Akademik",
-  "/reports": "Laporan",
-  "/settings": "Pengaturan",
   "/ujian": "Ujian",
   "/bank-soal": "Bank Soal",
   "/data-siswa": "Data Siswa",
+  "/akademik": "Akademik",
+  "/laporan": "Laporan",
+  "/settings": "Pengaturan",
 };
 
 function getPageTitle(pathname: string): string {
@@ -30,6 +28,7 @@ function getPageTitle(pathname: string): string {
 export default function Header() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useSidebar();
+  const { user, isSiswa, loading } = useUserRole();
   const pageTitle = getPageTitle(pathname);
 
   return (
@@ -49,14 +48,16 @@ export default function Header() {
       </div>
 
       <div className="flex-1 max-w-sm ml-auto">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Cari..."
-            className="w-full pl-9 pr-4 py-2.5 bg-[#edf3ff]/75 border border-[#e3ebfa] rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-[#5485f1]/10 focus:border-[#6c97fa] transition-all placeholder:text-[#9aabc2]"
-          />
-        </div>
+        {!isSiswa && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari..."
+              className="w-full pl-9 pr-4 py-2.5 bg-[#edf3ff]/75 border border-[#e3ebfa] rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-[#5485f1]/10 focus:border-[#6c97fa] transition-all placeholder:text-[#9aabc2]"
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
@@ -66,9 +67,9 @@ export default function Header() {
         </button>
         <button className="flex items-center gap-2 pl-1 pr-3 py-1.5 rounded-2xl hover:bg-white transition-colors">
           <div className="w-7 h-7 bg-[#2f66e9] rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-[0_8px_16px_rgba(47,102,233,0.22)]">
-            AU
+            {loading ? "..." : (user?.full_name?.charAt(0).toUpperCase() || "A")}
           </div>
-          <span className="text-xs font-medium text-gray-700">Admin</span>
+          <span className="text-xs font-medium text-gray-700">{loading ? "Memuat..." : (user?.full_name?.split(" ")[0] || "User")}</span>
           <ChevronDown className="w-3 h-3 text-gray-400" />
         </button>
       </div>

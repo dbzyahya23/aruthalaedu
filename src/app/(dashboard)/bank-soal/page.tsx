@@ -1,19 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Plus, Search, Edit2, Trash2, Eye } from "lucide-react";
 
 const MAPEL = ["Semua", "Matematika", "IPA", "IPS", "Bahasa Indonesia", "Bahasa Inggris", "PKn", "Agama"];
 const TINGKAT = ["Semua", "Kelas 7", "Kelas 8", "Kelas 9", "Kelas 10", "Kelas 11", "Kelas 12"];
 
-const DUMMY_QUESTIONS = [
-  { id: "1", type: "multiple_choice", mata_pelajaran: "Matematika", tingkat: 9, topik: "Aljabar", difficulty: "sedang", scope: "sekolah", usage_count: 12, content: { text: "Diketahui x = 5 dan y = 3. Berapakah nilai dari x² + 2xy?" }, created_at: "2026-06-15" },
-  { id: "2", type: "essay", mata_pelajaran: "Bahasa Indonesia", tingkat: 8, topik: "Teks Narasi", difficulty: "sulit", scope: "private", usage_count: 3, content: { text: "Jelaskan struktur teks narasi dan berikan contohnya!" }, created_at: "2026-06-10" },
-  { id: "3", type: "multiple_choice", mata_pelajaran: "IPA", tingkat: 7, topik: "Fotosintesis", difficulty: "mudah", scope: "yayasan", usage_count: 28, content: { text: "Proses fotosintesis terjadi di bagian sel tumbuhan yang disebut...?" }, created_at: "2026-06-08" },
-  { id: "4", type: "true_false", mata_pelajaran: "PKn", tingkat: 9, topik: "Pancasila", difficulty: "mudah", scope: "sekolah", usage_count: 5, content: { text: "Pancasila disahkan pada tanggal 1 Juni 1945." }, created_at: "2026-06-05" },
-  { id: "5", type: "multiple_choice", mata_pelajaran: "Matematika", tingkat: 10, topik: "Trigonometri", difficulty: "sulit", scope: "private", usage_count: 0, content: { text: "Nilai dari sin 30° × cos 60° + tan 45° adalah..." }, created_at: "2026-06-02" },
-];
+import { useRouter } from "next/navigation";
+import { useUserRole } from "@/hooks/useUserRole";
+import { createClient } from "@/lib/supabase/client";
 
 const TYPE_LABEL: Record<string, string> = {
   multiple_choice: "Pilihan Ganda",
@@ -35,16 +31,61 @@ const SCOPE_STYLE: Record<string, { label: string; className: string }> = {
 };
 
 export default function BankSoalPage() {
+  const router = useRouter();
+  const { isSiswa, loading: roleLoading } = useUserRole();
   const [search, setSearch] = useState("");
   const [mapel, setMapel] = useState("Semua");
   const [tingkat, setTingkat] = useState("Semua");
+  const [questions, setQuestions] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!roleLoading && isSiswa) {
+      router.replace("/overview");
+    }
+  }, [isSiswa, roleLoading, router]);
+
+  useEffect(() => {
+    async function fetchData() {
+      const supabase = createClient();
+      const { data } = await supabase.from('questions').select('*').order('created_at', { ascending: false });
+      if (data) setQuestions(data);
+    }
+    fetchData();
+  }, []);
+
+  if (roleLoading || isSiswa) {
+    return <div className="p-8 text-center text-gray-500">Memeriksa akses...</div>;
+  }
+
+  const filtered = questions.filter(q => {
+    const mMatch = mapel === "Semua" || q.mata_pelajaran === mapel;
+    const tMatch = tingkat === "Semua" || q.tingkat?.toString() === tingkat.replace("Kelas ", "");
+    const sMatch = (q.content?.text || "").toLowerCase().includes(search.toLowerCase());
+    return mMatch && tMatch && sMatch;
+  });
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus soal ini?")) return;
+    const supabase = createClient();
+    const { error } = await supabase.from('questions').delete().eq('id', id);
+    if (!error) {
+      setQuestions(prev => prev.filter(q => q.id !== id));
+      alert("Soal berhasil dihapus!");
+    } else {
+      if (error.code === '23503' || error.message.includes('foreign key constraint')) {
+        alert("Gagal: Soal ini tidak dapat dihapus karena sedang digunakan dalam satu atau lebih Ujian. Hapus soal dari ujian terkait terlebih dahulu.");
+      } else {
+        alert("Gagal menghapus soal: " + error.message);
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="page-title">Bank Soal</h1>
-          <p className="page-subtitle">312 soal tersimpan di perpustakaan sekolah Anda</p>
+          <p className="page-subtitle">{questions.length} soal tersimpan di perpustakaan sekolah Anda</p>
         </div>
         <Link href="/bank-soal/buat" className="btn-primary">
           <Plus className="w-4 h-4" /> Buat Soal
@@ -85,11 +126,11 @@ export default function BankSoalPage() {
         </select>
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card overflow-hidden overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="border-b border-white/80">
-              {["Soal", "Tipe", "Mapel · Kelas", "Kesulitan", "Scope", "Dipakai", ""].map((h) => (
+              {["Soal", "Mapel · Kelas", "Topik", "Dipakai", ""].map((h) => (
                 <th
                   key={h}
                   className="px-5 py-3 text-left font-medium text-xs text-gray-400 uppercase tracking-wide"
@@ -100,47 +141,60 @@ export default function BankSoalPage() {
             </tr>
           </thead>
           <tbody>
-            {DUMMY_QUESTIONS.map((q) => {
-              const scope = SCOPE_STYLE[q.scope];
-              return (
-                <tr key={q.id} className="border-b border-white/60 hover:bg-white/70 transition-colors">
-                  <td className="px-5 py-4 max-w-xs">
-                    <div className="text-gray-900 truncate">{q.content.text}</div>
-                    <div className="text-[11px] text-gray-400 mt-0.5">{q.topik}</div>
-                  </td>
-                  <td className="px-5 py-4 text-gray-600">{TYPE_LABEL[q.type]}</td>
-                  <td className="px-5 py-4">
-                    <div className="text-gray-900">{q.mata_pelajaran}</div>
-                    <div className="text-[11px] text-gray-400">Kelas {q.tingkat}</div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={DIFF_STYLE[q.difficulty ?? "sedang"]}>{q.difficulty}</span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`text-xs font-medium ${scope.className}`}>{scope.label}</span>
-                  </td>
-                  <td className="px-5 py-4 text-gray-500">{q.usage_count}×</td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-1">
-                      <button className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {filtered.map(q => (
+              <tr key={q.id} className="table-row border-b border-gray-100 hover:bg-gray-50/50">
+                <td className="px-6 py-4">
+                  <div className="font-medium text-gray-900 mb-1 line-clamp-2 leading-relaxed" style={{ fontSize: 13 }}>
+                    {q.content?.text || "(Tanpa teks)"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded-full">
+                      {TYPE_LABEL[q.type] || q.type}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${DIFF_STYLE[q.difficulty] || "bg-gray-100"}`}>
+                      {q.difficulty}
+                    </span>
+                    <span className={`text-xs font-medium ${SCOPE_STYLE[q.scope]?.className || "text-gray-500"}`}>
+                      • {SCOPE_STYLE[q.scope]?.label || q.scope}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-semibold text-gray-900">{q.mata_pelajaran}</div>
+                  <div className="text-xs text-gray-500">Kelas {q.tingkat}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {q.topik || "-"}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
+                  {q.usage_count || 0}x
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(q.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-sm text-gray-500">
+                  Belum ada soal di Bank Soal.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
         <div className="flex items-center justify-between px-5 py-4 border-t border-white/80">
-          <span className="text-sm text-gray-500">Menampilkan 1–20 dari 312 soal</span>
           <div className="flex gap-1">
             {["1", "2", "3", "...", "16"].map((p) => (
               <button

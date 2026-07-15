@@ -26,17 +26,6 @@ interface ViolationEvent {
   occurredAt: string;
 }
 
-const DUMMY_SESSIONS: MonitorSession[] = [
-  { id: "s1", siswa: "Budi Santoso", nisn: "1234567890", status: "in_progress", progress: 14, total: 20, time_remaining: 2400, violations: 0, is_flagged: false },
-  { id: "s2", siswa: "Ani Rahayu", nisn: "1234567891", status: "in_progress", progress: 17, total: 20, time_remaining: 1800, violations: 2, is_flagged: false },
-  { id: "s3", siswa: "Candra Putra", nisn: "1234567892", status: "submitted", progress: 20, total: 20, time_remaining: 0, violations: 1, is_flagged: false, score: 82 },
-  { id: "s4", siswa: "Dewi Lestari", nisn: "1234567893", status: "in_progress", progress: 8, total: 20, time_remaining: 3600, violations: 5, is_flagged: true },
-  { id: "s5", siswa: "Eko Prasetyo", nisn: "1234567894", status: "not_started", progress: 0, total: 20, time_remaining: 5400, violations: 0, is_flagged: false },
-  { id: "s6", siswa: "Fira Amelia", nisn: "1234567895", status: "in_progress", progress: 20, total: 20, time_remaining: 600, violations: 0, is_flagged: false },
-  { id: "s7", siswa: "Gilang Ramadan", nisn: "1234567896", status: "submitted", progress: 20, total: 20, time_remaining: 0, violations: 0, is_flagged: false, score: 95 },
-  { id: "s8", siswa: "Hana Putri", nisn: "1234567897", status: "in_progress", progress: 11, total: 20, time_remaining: 2100, violations: 3, is_flagged: true },
-];
-
 const STATUS_CARD: Record<string, { border: string; bg: string; dot: string }> = {
   not_started: { border: "var(--border)", bg: "transparent", dot: "var(--t3)" },
   in_progress: { border: "rgba(88,101,242,0.3)", bg: "var(--accent-dim)", dot: "var(--accent)" },
@@ -44,19 +33,88 @@ const STATUS_CARD: Record<string, { border: string; bg: string; dot: string }> =
 };
 
 export default function MonitorClient({ examId }: { examId: string }) {
-  const [sessions, setSessions] = useState<MonitorSession[]>(DUMMY_SESSIONS);
+  const [sessions, setSessions] = useState<MonitorSession[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [recentViolations, setRecentViolations] = useState<ViolationEvent[]>([]);
   const [realtimeAvailable, setRealtimeAvailable] = useState(false);
+  const [examName, setExamName] = useState("Memuat...");
+  const [examStartAt, setExamStartAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const submitted = useMemo(() => sessions.filter((s) => s.status === "submitted").length, [sessions]);
   const inProgress = useMemo(() => sessions.filter((s) => s.status === "in_progress").length, [sessions]);
   const notStarted = useMemo(() => sessions.filter((s) => s.status === "not_started").length, [sessions]);
   const flagged = useMemo(() => sessions.filter((s) => s.is_flagged).length, [sessions]);
 
+  // Initial Fetch
+  useEffect(() => {
+    async function fetchData() {
+      const supabase = createSafeClient();
+      if (!supabase) return;
+
+      const { data: examData } = await supabase.from('exams').select('title, start_at').eq('id', examId).single();
+      if (examData) {
+        setExamName(examData.title);
+        setExamStartAt(examData.start_at);
+      }
+
+      const { count: totalQ } = await supabase.from('exam_questions').select('*', { count: 'exact', head: true }).eq('exam_id', examId);
+      const total = totalQ || 0;
+
+      const { data: sessionData } = await supabase
+        .from('exam_sessions')
+        .select(`
+          id,
+          status,
+          time_remaining,
+          violation_count,
+          is_flagged,
+          profiles(full_name, nisn)
+        `)
+        .eq('exam_id', examId);
+      
+      if (sessionData) {
+        // Fetch all answers for these sessions to calculate progress
+        const sessionIds = sessionData.map(s => s.id);
+        const { data: answersData } = await supabase
+          .from('exam_answers')
+          .select('session_id')
+          .in('session_id', sessionIds);
+          
+        const answerCounts = (answersData || []).reduce((acc: any, curr: any) => {
+          acc[curr.session_id] = (acc[curr.session_id] || 0) + 1;
+          return acc;
+        }, {});
+
+        const formattedSessions: MonitorSession[] = sessionData.map((s: any) => ({
+          id: s.id,
+          siswa: s.profiles?.full_name || "Siswa Tidak Diketahui",
+          nisn: s.profiles?.nisn || "-",
+          status: s.status,
+          progress: answerCounts[s.id] || 0,
+          total: total,
+          time_remaining: s.time_remaining || 0,
+          violations: s.violation_count || 0,
+          is_flagged: s.is_flagged || false,
+        }));
+        
+        setSessions(formattedSessions);
+      }
+      setLoading(false);
+    }
+    fetchData();
+  }, [examId]);
+
+  // Timer for time_remaining and elapsed
   useEffect(() => {
     const interval = setInterval(() => {
-      setElapsed((value) => value + 1);
+      setElapsed((_) => {
+        if (!examStartAt) return 0;
+        const startMs = new Date(examStartAt).getTime();
+        const diff = Math.floor((Date.now() - startMs) / 1000);
+        return diff > 0 ? diff : 0;
+      });
+      
       setSessions((prev) => prev.map((session) =>
         session.status === "in_progress"
           ? { ...session, time_remaining: Math.max(0, session.time_remaining - 1) }
@@ -65,21 +123,22 @@ export default function MonitorClient({ examId }: { examId: string }) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [examStartAt]);
 
+  // Realtime Subscriptions
   useEffect(() => {
     const supabase = createSafeClient();
     if (!supabase) return;
 
-    const channel = supabase
+    // Listen to exam_violations
+    const violationChannel = supabase
       .channel(`exam-violations-${examId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "exam_violations" },
         (payload) => {
           const row = payload.new as Record<string, any>;
-          if (!row) return;
-          if (row.exam_id && row.exam_id !== examId) return;
+          if (!row || (row.exam_id && row.exam_id !== examId)) return;
 
           const sessionId = row.session_id ?? `session-${Date.now()}`;
           const violationType = row.violation_type ?? "pelanggaran";
@@ -96,33 +155,15 @@ export default function MonitorClient({ examId }: { examId: string }) {
           ].slice(0, 5));
 
           setSessions((current) => {
-            const existing = current.find((session) => session.id === sessionId);
-            if (existing) {
-              return current.map((session) =>
-                session.id === sessionId
-                  ? {
-                      ...session,
-                      violations: session.violations + 1,
-                      is_flagged: true,
-                    }
-                  : session
-              );
-            }
-
-            return [
-              {
-                id: sessionId,
-                siswa: `Siswa ${sessionId.slice(-4)}`,
-                nisn: "-",
-                status: "in_progress",
-                progress: 0,
-                total: 20,
-                time_remaining: 0,
-                violations: 1,
-                is_flagged: true,
-              },
-              ...current,
-            ];
+            return current.map((session) =>
+              session.id === sessionId
+                ? {
+                    ...session,
+                    violations: session.violations + 1,
+                    is_flagged: true,
+                  }
+                : session
+            );
           });
         }
       )
@@ -132,8 +173,57 @@ export default function MonitorClient({ examId }: { examId: string }) {
         }
       });
 
+    // Listen to exam_sessions (for status updates like submitted)
+    const sessionChannel = supabase
+      .channel(`exam-sessions-${examId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "exam_sessions", filter: `exam_id=eq.${examId}` },
+        (payload) => {
+          const row = payload.new as Record<string, any>;
+          if (!row) return;
+
+          setSessions((current) => {
+            return current.map((session) =>
+              session.id === row.id
+                ? {
+                    ...session,
+                    status: row.status,
+                    time_remaining: row.time_remaining !== null ? row.time_remaining : session.time_remaining,
+                    violations: row.violation_count !== null ? row.violation_count : session.violations,
+                    is_flagged: row.is_flagged !== null ? row.is_flagged : session.is_flagged,
+                  }
+                : session
+            );
+          });
+        }
+      )
+      .subscribe();
+
+    // Listen to exam_answers (for progress updates)
+    const answersChannel = supabase
+      .channel(`exam-answers-${examId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "exam_answers" },
+        (payload) => {
+          const row = payload.new as Record<string, any>;
+          if (!row || !row.session_id) return;
+          setSessions((current) => {
+            return current.map((session) =>
+              session.id === row.session_id
+                ? { ...session, progress: session.progress + 1 }
+                : session
+            );
+          });
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(violationChannel);
+      supabase.removeChannel(sessionChannel);
+      supabase.removeChannel(answersChannel);
     };
   }, [examId]);
 
@@ -146,7 +236,7 @@ export default function MonitorClient({ examId }: { examId: string }) {
           </Link>
           <div>
             <h1 style={{ fontFamily: "var(--fd)", fontSize: 22, fontWeight: 700 }}>Live Monitor</h1>
-            <p style={{ fontSize: 13, color: "var(--t2)" }}>UTS Matematika Kelas 9A · {sessions.length} siswa</p>
+            <p style={{ fontSize: 13, color: "var(--t2)" }}>{examName} · {sessions.length} siswa</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -175,7 +265,7 @@ export default function MonitorClient({ examId }: { examId: string }) {
                 <Icon size={14} color={color} />
               </div>
             </div>
-            <div style={{ fontFamily: "var(--fd)", fontSize: 28, fontWeight: 800, color }}>{val}</div>
+            <div style={{ fontFamily: "var(--fd)", fontSize: 28, fontWeight: 800, color }}>{loading ? "-" : val}</div>
           </div>
         ))}
       </div>
@@ -190,24 +280,35 @@ export default function MonitorClient({ examId }: { examId: string }) {
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              {['No','Nama Siswa','NISN','Status','Pengerjaan','Pelanggaran',''].map((h) => (
+              {['No','Nama Siswa','NISN','Status','Pengerjaan','Sisa Waktu','Pelanggaran','Aksi'].map((h) => (
                 <th key={h} className="px-5 py-3 text-left" style={{ fontSize: 11, color: "var(--t3)", fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {sessions.map((r, i) => {
+            {loading ? (
+              <tr><td colSpan={8} className="text-center py-10" style={{ color: "var(--t3)" }}>Memuat data peserta...</td></tr>
+            ) : sessions.length === 0 ? (
+              <tr><td colSpan={8} className="text-center py-10" style={{ color: "var(--t3)" }}>Belum ada siswa yang mulai ujian.</td></tr>
+            ) : sessions.map((r, i) => {
               const isFlagged = r.is_flagged;
               return (
                 <tr key={r.id} style={{ borderBottom: "1px solid var(--border)", background: isFlagged ? "rgba(245,158,11,0.04)" : "transparent" }}>
                   <td className="px-5 py-3.5" style={{ color: "var(--t3)" }}>{i + 1}</td>
                   <td className="px-5 py-3.5" style={{ fontWeight: 500 }}>{r.siswa}</td>
                   <td className="px-5 py-3.5" style={{ color: "var(--t2)", fontFamily: "monospace" }}>{r.nisn}</td>
-                  <td className="px-5 py-3.5" style={{ color: isFlagged ? "var(--amber)" : "var(--t2)" }}>{r.status.replace('_', ' ')}</td>
+                  <td className="px-5 py-3.5" style={{ color: isFlagged ? "var(--amber)" : r.status === "submitted" ? "var(--green)" : "var(--t2)" }}>
+                    {r.status === "in_progress" ? "Mengerjakan" : r.status === "submitted" ? "Selesai" : r.status}
+                  </td>
                   <td className="px-5 py-3.5" style={{ color: "var(--t2)" }}>{r.progress}/{r.total}</td>
-                  <td className="px-5 py-3.5" style={{ color: "var(--t2)" }}>{formatSeconds(r.time_remaining)}</td>
+                  <td className="px-5 py-3.5" style={{ color: "var(--t2)", fontVariantNumeric: "tabular-nums" }}>
+                    {r.status === "submitted" ? "00:00" : formatSeconds(r.time_remaining)}
+                  </td>
+                  <td className="px-5 py-3.5" style={{ color: r.violations > 0 ? "var(--amber)" : "var(--t2)", fontWeight: r.violations > 0 ? 600 : 400 }}>
+                    {r.violations}
+                  </td>
                   <td className="px-5 py-3.5">
-                    <button style={{ fontSize: 12, color: "var(--accent)" }}>Detail</button>
+                    <Link href={`/ujian/${examId}/hasil?session=${r.id}`} style={{ fontSize: 12, color: "var(--accent)" }}>Detail</Link>
                   </td>
                 </tr>
               );
@@ -222,9 +323,6 @@ export default function MonitorClient({ examId }: { examId: string }) {
             <div style={{ fontSize: 13, color: "var(--t2)", fontWeight: 600 }}>Pelanggaran Terbaru</div>
             <div style={{ fontSize: 11, color: "var(--t3)" }}>Streaming dari Supabase Realtime</div>
           </div>
-          <div style={{ fontSize: 12, color: realtimeAvailable ? "#6EE7B7" : "var(--t2)" }}>
-            {realtimeAvailable ? "Realtime aktif" : "Realtime tidak tersedia"}
-          </div>
         </div>
 
         {recentViolations.length === 0 ? (
@@ -238,7 +336,7 @@ export default function MonitorClient({ examId }: { examId: string }) {
                   <span style={{ fontSize: 11, color: "var(--t3)" }}>{item.occurredAt}</span>
                 </div>
                 <div style={{ fontSize: 12, color: "var(--t2)" }}>
-                  {item.sessionId} tercatat pelanggaran.
+                  Sesi <span style={{ fontFamily: "monospace" }}>{item.sessionId.slice(-6)}</span> tercatat melakukan pelanggaran.
                 </div>
               </div>
             ))}

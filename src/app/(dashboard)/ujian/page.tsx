@@ -1,16 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Clock, Users, BarChart2, Play, Settings } from "lucide-react";
-
-const DUMMY_EXAMS = [
-  { id: "1", title: "UTS Matematika Kelas 9A", mata_pelajaran: "Matematika", status: "published", duration_minutes: 90, start_at: "2026-07-15 08:00", end_at: "2026-07-15 10:30", siswa: 32, submitted: 28, avg_score: 76.5 },
-  { id: "2", title: "Ulangan Harian IPA Bab 4", mata_pelajaran: "IPA", status: "closed", duration_minutes: 60, start_at: "2026-07-12 10:00", end_at: "2026-07-12 11:00", siswa: 30, submitted: 30, avg_score: 82.3 },
-  { id: "3", title: "UTS Bahasa Indonesia Kelas 7B", mata_pelajaran: "Bahasa Indonesia", status: "draft", duration_minutes: 90, start_at: "2026-07-20 08:00", end_at: "2026-07-20 10:30", siswa: 35, submitted: 0, avg_score: null },
-  { id: "4", title: "Quiz Matematika Kelas 8B", mata_pelajaran: "Matematika", status: "closed", duration_minutes: 45, start_at: "2026-07-10 09:00", end_at: "2026-07-10 10:00", siswa: 28, submitted: 27, avg_score: 68.4 },
-  { id: "5", title: "UAS IPS Semester 1", mata_pelajaran: "IPS", status: "draft", duration_minutes: 120, start_at: "2026-08-01 07:30", end_at: "2026-08-01 10:00", siswa: 33, submitted: 0, avg_score: null },
-];
+import { useRouter } from "next/navigation";
+import { Plus, Clock, Users, BarChart2, Play, Settings, Trash2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const STATUS: Record<string, { label: string; className: string }> = {
   draft: { label: "Draft", className: "badge-default" },
@@ -21,9 +16,31 @@ const STATUS: Record<string, { label: string; className: string }> = {
 const FILTERS = ["Semua", "Aktif", "Draft", "Selesai"];
 
 export default function UjianPage() {
+  const router = useRouter();
+  const { isSiswa, loading: roleLoading } = useUserRole();
   const [filter, setFilter] = useState("Semua");
+  const [exams, setExams] = useState<any[]>([]);
 
-  const filtered = DUMMY_EXAMS.filter((e) => {
+  useEffect(() => {
+    if (!roleLoading && isSiswa) {
+      router.replace("/overview");
+    }
+  }, [isSiswa, roleLoading, router]);
+
+  useEffect(() => {
+    async function fetchExams() {
+      const supabase = createClient();
+      const { data } = await supabase.from('exams').select('*').order('created_at', { ascending: false });
+      if (data) setExams(data);
+    }
+    fetchExams();
+  }, []);
+
+  if (roleLoading || isSiswa) {
+    return <div className="p-8 text-center text-gray-500">Memeriksa akses...</div>;
+  }
+
+  const filtered = exams.filter((e) => {
     if (filter === "Aktif") return e.status === "published";
     if (filter === "Draft") return e.status === "draft";
     if (filter === "Selesai") return e.status === "closed";
@@ -79,7 +96,7 @@ export default function UjianPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-1.5">
                   <h3 className="text-sm font-semibold text-gray-900">{exam.title}</h3>
-                  <span className={st.className}>{st.label}</span>
+                  <span className={st?.className || "badge-default"}>{st?.label || exam.status}</span>
                 </div>
                 <div className="flex items-center gap-4 flex-wrap text-xs text-gray-500">
                   <span className="flex items-center gap-1">
@@ -87,9 +104,9 @@ export default function UjianPage() {
                   </span>
                   <span>{exam.mata_pelajaran}</span>
                   <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3" /> {exam.siswa} siswa
+                    <Users className="w-3 h-3" /> {exam.siswa || 0} siswa
                   </span>
-                  <span>{exam.start_at}</span>
+                  {exam.start_at && <span>{new Date(exam.start_at).toLocaleString()}</span>}
                 </div>
               </div>
 
@@ -97,18 +114,18 @@ export default function UjianPage() {
                 <div className="flex items-center gap-6 shrink-0">
                   <div className="text-center">
                     <div className="text-xl font-bold text-gray-900">
-                      {exam.submitted}/{exam.siswa}
+                      {exam.submitted || 0}/{exam.siswa || 0}
                     </div>
                     <div className="text-[11px] text-gray-400">Submit</div>
                   </div>
-                  {exam.avg_score !== null && (
+                  {exam.avg_score != null && (
                     <div className="text-center">
                       <div
                         className={`text-xl font-bold ${
                           exam.avg_score >= 75 ? "text-green-600" : "text-amber-600"
                         }`}
                       >
-                        {exam.avg_score.toFixed(1)}
+                        {Number(exam.avg_score).toFixed(1)}
                       </div>
                       <div className="text-[11px] text-gray-400">Rata-rata</div>
                     </div>
@@ -134,6 +151,25 @@ export default function UjianPage() {
                 <Link href={`/ujian/${exam.id}`} className="btn-outline p-2">
                   <Settings className="w-4 h-4" />
                 </Link>
+                <button 
+                  onClick={async () => {
+                    if (!confirm(`Hapus ujian "${exam.title}"? Seluruh sesi dan jawaban akan ikut terhapus.`)) return;
+                    const supabase = createClient();
+                    // Hapus sesi ujian terlebih dahulu (karena foreign key constraint)
+                    await supabase.from('exam_sessions').delete().eq('exam_id', exam.id);
+                    // Hapus ujian
+                    const { error } = await supabase.from('exams').delete().eq('id', exam.id);
+                    if (!error) {
+                      setExams(prev => prev.filter(e => e.id !== exam.id));
+                      alert("Ujian berhasil dihapus.");
+                    } else {
+                      alert("Gagal menghapus ujian: " + error.message);
+                    }
+                  }}
+                  className="btn-outline p-2 text-red-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           );
