@@ -5,6 +5,7 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
   --font-size: 16px;
   --background: #F6FAFF;
   --foreground: #111827;
