@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Filter, Plus, Search, ShieldCheck, Users, Mail, KeyRound, MoreHorizontal, Trash2, CheckCircle, XCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
+import { generateImpersonationLink } from "@/app/actions/impersonate";
 
 export interface ProfileRow {
   id: string;
@@ -27,6 +28,7 @@ export default function UserManagementPage() {
   const [newRole, setNewRole] = useState<ProfileRow["role"]>("GURU");
   const [newNisn, setNewNisn] = useState("");
   const [saving, setSaving] = useState(false);
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
 
   async function loadProfiles() {
     setLoading(true);
@@ -111,6 +113,23 @@ export default function UserManagementPage() {
       setProfiles(prev => prev.filter(p => p.id !== id));
     } catch (err) {
       console.error("Error deleting user:", err);
+    }
+  }
+
+  async function handleImpersonate(id: string, fullName: string) {
+    if (!confirm(`Anda akan login sebagai ${fullName}. Lanjutkan?`)) return;
+    setImpersonatingId(id);
+    try {
+      const { link, error } = await generateImpersonationLink(id);
+      if (error) {
+        alert("Gagal melakukan impersonation: " + error);
+      } else if (link) {
+        window.open(link, "_blank");
+      }
+    } catch (err: any) {
+      alert("Kesalahan: " + err.message);
+    } finally {
+      setImpersonatingId(null);
     }
   }
 
@@ -238,6 +257,14 @@ export default function UserManagementPage() {
                     }`}
                   >
                     {p.is_active !== false ? "Active" : "Suspended"}
+                  </button>
+                  <button
+                    onClick={() => handleImpersonate(p.id, p.full_name)}
+                    disabled={impersonatingId === p.id}
+                    title="Login Sebagai Pengguna Ini"
+                    className="p-1.5 rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                  >
+                    {impersonatingId === p.id ? <div className="h-4 w-4 rounded-full border-2 border-t-blue-600 animate-spin" /> : <KeyRound className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={() => deleteUser(p.id)}

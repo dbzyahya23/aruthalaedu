@@ -523,6 +523,8 @@ export default function AdminHubPage() {
           { href: "/class-management", title: "Class Management", desc: "Kelola kelas, wali kelas, dan pembagian siswa." },
           { href: "/subject-management", title: "Subject Management", desc: "Atur mata pelajaran, kode, dan struktur mapel." },
           { href: "/academic-year", title: "Academic Year", desc: "Semester, tahun ajaran, dan status aktif." },
+          { href: "/admin-hub/sekolah", title: "Tenant Management", desc: "Kelola status aktif dan kuota siswa sekolah." },
+          { href: "/admin-hub/audit", title: "Audit Logs", desc: "Pantau riwayat aktivitas admin dan sistem." },
         ].map((item) => (
           <Link key={item.href} href={item.href} className="card card-padding group hover:border-[#d8e6fb] hover:shadow-[0_22px_50px_rgba(57,111,190,0.12)] transition-all">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#2f66e9]">Admin CRUD</p>
