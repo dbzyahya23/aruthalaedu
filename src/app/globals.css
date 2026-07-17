@@ -171,3 +171,42 @@ button {
     background-color: var(--background);
   }
 }
+
+/* ── Cegah native input (time, date, select) hitam di Dark Mode OS ── */
+input[type="time"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"],
+select {
+  color-scheme: light;
+  background-color: #F9FAFB;
+  color: #1e293b;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0);
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+/* ── Animasi halus untuk overlay modal (cegah flash hitam) ── */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-overlay {
+  animation: overlayFadeIn 0.2s ease-out forwards;
+}
+
+.modal-content {
+  animation: modalSlideIn 0.2s ease-out forwards;
+}

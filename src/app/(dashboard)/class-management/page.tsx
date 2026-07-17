@@ -235,8 +235,8 @@ export default function ClassManagementPage() {
       </div>
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-[#e3ebfa] space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 modal-overlay">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-[#e3ebfa] space-y-4 modal-content">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">Tambah Kelas Baru</h3>
               <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>

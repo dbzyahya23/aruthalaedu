@@ -303,8 +303,8 @@ function ExamRoomClient({ params }: { params: Promise<{ id: string }> }) {
     <div className="min-h-screen bg-[#f8fbff] flex flex-col font-sans text-gray-900 select-none">
       {/* LOCK OVERLAY */}
       {isLocked && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/90 backdrop-blur-md p-4">
-          <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center space-y-6 shadow-2xl border border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/90 backdrop-blur-md p-4 modal-overlay">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center space-y-6 shadow-2xl border border-gray-200 modal-content">
             <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center mx-auto">
               {isProctorLocked ? <ShieldAlert className="w-8 h-8 animate-pulse" /> : <Lock className="w-8 h-8" />}
             </div>
@@ -334,8 +334,8 @@ function ExamRoomClient({ params }: { params: Promise<{ id: string }> }) {
 
       {/* CONFIRMATION SUBMIT MODAL */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 text-left space-y-5 shadow-2xl border border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 modal-overlay">
+          <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 text-left space-y-5 shadow-2xl border border-gray-200 modal-content">
             <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
               <div className="w-10 h-10 rounded-xl bg-[#eef5ff] text-[#2f66e9] flex items-center justify-center font-bold">
                 <Send className="w-5 h-5" />

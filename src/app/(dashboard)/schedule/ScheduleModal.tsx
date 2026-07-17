@@ -62,8 +62,8 @@ export default function ScheduleModal({ selectedDate, onClose, onSuccess }: Sche
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 modal-overlay">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden modal-content">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">Tambah Jadwal Pribadi</h2>
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
