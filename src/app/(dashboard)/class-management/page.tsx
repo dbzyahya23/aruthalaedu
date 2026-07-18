@@ -85,11 +85,9 @@ export default function ClassManagementPage() {
     setSaving(true);
     try {
       const supabase = createClient();
-      const randomId = "cls-" + Math.random().toString(36).substring(2, 10);
       const payload: Partial<Kelas> = {
-        id: randomId,
-        sekolah_id: user?.sekolah_id || "default-tenant",
-        yayasan_id: "default-yayasan",
+        sekolah_id: user?.sekolah_id || "11111111-1111-1111-1111-111111111111",
+        yayasan_id: "11111111-1111-1111-1111-111111111111",
         name: newName.trim(),
         tingkat: Number(newTingkat),
         tahun_ajaran: newYear.trim(),
