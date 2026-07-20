@@ -96,6 +96,12 @@ export default function BuatUjianPage() {
     const formattedStart = startAt ? new Date(startAt).toISOString() : null;
     const formattedEnd = endAt ? new Date(endAt).toISOString() : null;
 
+    if (endAt && new Date(endAt) < new Date()) {
+      alert("Waktu selesai ujian sudah terlewat! Silakan atur waktu mulai yang valid di masa depan.");
+      setSaving(false);
+      return;
+    }
+
     // 1. Insert Exam
     const { data: examData, error: examError } = await supabase.from('exams').insert({
       title: title,

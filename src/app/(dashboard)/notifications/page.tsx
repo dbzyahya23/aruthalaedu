@@ -69,11 +69,13 @@ export default function NotificationsPage() {
         }
 
         if (isSiswa) {
-          let eQuery = supabase.from("exams").select("id, title, status, duration_minutes, created_at").eq("status", "published").order("created_at", { ascending: false }).limit(6);
+          let eQuery = supabase.from("exams").select("id, title, status, duration_minutes, created_at, end_at").eq("status", "published").order("created_at", { ascending: false }).limit(6);
           if (sekolahId) eQuery = eQuery.eq("sekolah_id", sekolahId);
           const { data: eData } = await eQuery;
 
           (eData || []).forEach(e => {
+            if (e.end_at && new Date(e.end_at) < new Date()) return;
+            
             list.push({
               id: `exam-pub-${e.id}`,
               title: `Ujian Tersedia: ${e.title}`,

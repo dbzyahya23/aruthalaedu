@@ -41,6 +41,11 @@ Semua perubahan (Updates, Bug Fixes, New Features) pada Dasbor AruthalaEdu akan 
 - **Komponen/Fungsi:** Tata Letak (*Layout*), Header, Area Soal, dan Tombol Navigasi.
 - **Alasan Teknis:** Memperkuat keamanan visual (*Responsive Design*) untuk mencegah elemen tumpang tindih (*overlap*) atau melebih batas (*overflow*) saat dibuka melalui gawai kecil. Mengimplementasikan `break-words`, `overflow-x-auto` pada teks soal, memendekkan label tombol di layar kecil ("Sebelumnya" menjadi "Prev", dll.), dan menerapkan konfigurasi penumpukan baris tabel (*stack grid*) pada ringkasan hasil penyelesaian. Ruang Ujian kini 100% aman dimainkan lintas-platform.
 
+#### Poin 8: Penambalan Celah Notifikasi Ujian Kedaluwarsa
+- **File:** `src/app/(dashboard)/ujian/buat/page.tsx` & `src/app/(dashboard)/notifications/page.tsx`
+- **Komponen/Fungsi:** Fungsi `handlePublish` dan Kueri Notifikasi Siswa (`isSiswa`).
+- **Alasan Teknis:** Menutup celah logika (*logical bug*) di mana guru dapat mengatur batas akhir (*endAt*) di masa lalu, membuat ujian berstatus "kadaluwarsa" namun tetap bocor ke layar Notifikasi Siswa. Modifikasi mencakup perlindungan sisi *input* pembuatan ujian, dan perlindungan *filter* iterasi pada data *fetch* Supabase agar notifikasi masa lalu tidak akan pernah dirender.
+
 ---
 
 ## [2026-07-15] - Architectural Decision Records (ADR) dari Sesi Penyelarasan `/grill-me`
