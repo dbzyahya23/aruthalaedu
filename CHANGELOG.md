@@ -127,6 +127,11 @@ Semua perubahan (Updates, Bug Fixes, New Features) pada Dasbor AruthalaEdu akan 
 - **Komponen/Fungsi:** Form persetujuan Ujian (*Agreement Checkbox*), Peta Navigasi Soal (*Grid Question Map*).
 - **Alasan Teknis:** Dua isu minor pada tata letak visual (*styling*) berpotensi mereduksi pengalaman siswa: pertama, centang persetujuan (*checkbox*) sering kali tak tampak berbaur di beberapa peramban akibat intervensi gaya bawaan; injeksi *tailwind-accent* mengkalibrasi ulang paksa render warnanya. Kedua, cincin tepian bundar pada angka navigasi peta soal (*ring-offset*) acapkali terpangkas karena bentrok dengan luapan gulir kontainer (*overflow-y*); penambahan bantalan (*padding*) dalam elemen pembungkus kini membebaskan pendaran cincin sepenuhnya dari efek kliping visual.
 
+#### Poin 21: Migrasi Native Checkbox ke Custom SVG Component (Exam Gate)
+- **File:** `src/app/e/[id]/page.tsx`
+- **Komponen/Fungsi:** Form persetujuan Ujian (*Agreement Checkbox*).
+- **Alasan Teknis:** Intervensi lapisan CSS Reset (Preflight) pada lingkungan Tailwind acapkali melucuti properti `appearance` dari elemen input bawaan (`<input type="checkbox">`), menyebabkan kotak centang menjadi tak kasatmata (invisible) pada platform peramban modern tertentu meski warna aksen telah disematkan. Untuk menjamin stabilitas (*cross-browser consistency*), komponen ini dimusnahkan dan diganti sepenuhnya dengan elemen kerajinan tangan (*custom craft*) bertenaga `div` stateful serta ikon vektor murni (SVG `polyline`). Komponen ini menjamin rendering 100% konsisten di semua layar gawai dan mematuhi panduan kelengkapan aksesibilitas *select-none*.
+
 ---
 
 ## [2026-07-15] - Architectural Decision Records (ADR) dari Sesi Penyelarasan `/grill-me`

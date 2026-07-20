@@ -221,17 +221,21 @@ export default function ExamLandingPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {/* Agreement Checkbox */}
-            <label className="flex items-start gap-3.5 p-4 rounded-2xl border border-gray-200 hover:border-[#2f66e9]/40 bg-white cursor-pointer transition-all">
-              <input
-                type="checkbox"
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
-                className="mt-0.5 w-5 h-5 rounded-md border-gray-300 accent-[#2f66e9] focus:ring-[#2f66e9] cursor-pointer"
-              />
-              <span className="text-xs sm:text-sm text-gray-700 leading-relaxed font-medium">
+            <div 
+              onClick={() => setAgreed(!agreed)}
+              className="flex items-start gap-3.5 p-4 rounded-2xl border border-gray-200 hover:border-[#2f66e9]/40 bg-white cursor-pointer transition-all"
+            >
+              <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${agreed ? "bg-[#2f66e9] border-[#2f66e9]" : "border-gray-300 bg-white"}`}>
+                {agreed && (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 text-white">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-xs sm:text-sm text-gray-700 leading-relaxed font-medium select-none">
                 Saya telah membaca, memahami, dan menyetujui seluruh tata tertib ujian daring ini serta berkomitmen mengerjakan secara jujur tanpa bantuan dari pihak mana pun.
               </span>
-            </label>
+            </div>
 
             {/* CTA Start Button */}
             {exam && exam.start_at && new Date() < new Date(exam.start_at) ? (
