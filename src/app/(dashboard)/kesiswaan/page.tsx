@@ -45,6 +45,11 @@ export default function KesiswaanPage() {
   const [form, setForm] = useState({ title: "", content: "", type: "Pengumuman", is_pinned: false });
   const [saving, setSaving] = useState(false);
 
+  // Form for new ekskul (staff only)
+  const [showEkskulForm, setShowEkskulForm] = useState(false);
+  const [ekskulForm, setEkskulForm] = useState({ name: "", description: "", schedule: "" });
+  const [ekskulSaving, setEkskulSaving] = useState(false);
+
   const fetchData = useCallback(async () => {
     if (!identity.sekolahId) {
       setLoading(false);
@@ -98,6 +103,34 @@ export default function KesiswaanPage() {
   const handleTogglePin = async (id: string, currentStatus: boolean) => {
     const { error } = await supabase.from("announcements").update({ is_pinned: !currentStatus }).eq("id", id);
     if (error) alert("Gagal menyematkan: " + error.message);
+    else fetchData();
+  };
+
+  const handleEkskulSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ekskulForm.name) return;
+    setEkskulSaving(true);
+    const { error } = await supabase.from("extracurriculars").insert({
+      name: ekskulForm.name,
+      description: ekskulForm.description || null,
+      schedule: ekskulForm.schedule || null,
+      sekolah_id: identity.sekolahId,
+      yayasan_id: identity.yayasanId,
+      is_active: true,
+    });
+    setEkskulSaving(false);
+    if (error) alert("Gagal membuat ekskul: " + error.message);
+    else {
+      setShowEkskulForm(false);
+      setEkskulForm({ name: "", description: "", schedule: "" });
+      fetchData();
+    }
+  };
+
+  const handleDeleteEkskul = async (id: string) => {
+    if (!confirm("Hapus ekstrakurikuler ini?")) return;
+    const { error } = await supabase.from("extracurriculars").delete().eq("id", id);
+    if (error) alert("Gagal menghapus: " + error.message);
     else fetchData();
   };
 
@@ -209,7 +242,14 @@ export default function KesiswaanPage() {
 
         {/* Ekskul Sidebar — 1 col */}
         <div className="space-y-4">
-          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Ekstrakurikuler</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Ekstrakurikuler</h2>
+            {isStaff && (
+              <button onClick={() => setShowEkskulForm(true)} className="p-1.5 bg-[#eef5ff] text-[#2f66e9] rounded-lg hover:bg-[#d6e6ff] transition-colors" title="Tambah Ekskul">
+                <Plus className="w-4 h-4" />
+              </button>
+            )}
+          </div>
           {ekskuls.length === 0 ? (
             <div className="card card-padding text-center py-8">
               <Users className="mx-auto h-10 w-10 text-gray-300 mb-2" />
@@ -217,8 +257,13 @@ export default function KesiswaanPage() {
             </div>
           ) : (
             ekskuls.map((ek) => (
-              <div key={ek.id} className="card card-padding hover:shadow-md transition-shadow">
-                <h3 className="text-sm font-bold text-gray-900">{ek.name}</h3>
+              <div key={ek.id} className="card card-padding hover:shadow-md transition-shadow relative group">
+                {isStaff && (
+                  <button onClick={() => handleDeleteEkskul(ek.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100" title="Hapus Ekskul">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+                <h3 className="text-sm font-bold text-gray-900 pr-6">{ek.name}</h3>
                 {ek.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{ek.description}</p>}
                 {ek.schedule && (
                   <p className="text-[10px] text-[#2f66e9] font-medium mt-2">🕐 {ek.schedule}</p>
@@ -262,6 +307,39 @@ export default function KesiswaanPage() {
               <button type="submit" disabled={saving}
                 className="w-full py-2.5 rounded-xl bg-[#2f66e9] text-white text-sm font-semibold hover:bg-[#2558d4] transition-colors disabled:opacity-50 shadow-lg shadow-[#2f66e9]/20">
                 {saving ? "Menyimpan..." : "Publikasikan"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Ekskul Modal */}
+      {showEkskulForm && isStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Tambah Ekstrakurikuler</h3>
+              <button onClick={() => setShowEkskulForm(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleEkskulSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nama Ekskul</label>
+                <input type="text" value={ekskulForm.name} onChange={(e) => setEkskulForm(p => ({ ...p, name: e.target.value }))} required
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20" placeholder="Cth: Paduan Suara" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Jadwal (Opsional)</label>
+                <input type="text" value={ekskulForm.schedule} onChange={(e) => setEkskulForm(p => ({ ...p, schedule: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20" placeholder="Cth: Setiap Rabu, 15:00" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Deskripsi Singkat</label>
+                <textarea value={ekskulForm.description} onChange={(e) => setEkskulForm(p => ({ ...p, description: e.target.value }))} rows={3}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20 resize-none" placeholder="Keterangan singkat..." />
+              </div>
+              <button type="submit" disabled={ekskulSaving}
+                className="w-full py-2.5 rounded-xl bg-[#2f66e9] text-white text-sm font-semibold hover:bg-[#2558d4] transition-colors disabled:opacity-50 shadow-lg shadow-[#2f66e9]/20">
+                {ekskulSaving ? "Menyimpan..." : "Simpan Ekskul"}
               </button>
             </form>
           </div>

@@ -97,6 +97,11 @@ Semua perubahan (Updates, Bug Fixes, New Features) pada Dasbor AruthalaEdu akan 
 - **Komponen/Fungsi:** Fitur Hapus (`handleDeleteAnnouncement`) dan Sematkan/Pin (`handleTogglePin`).
 - **Alasan Teknis:** Melengkapi fungsionalitas CRUD Dasbor Kesiswaan khusus staf pendidik. Pengguna kini memiliki wewenang untuk mencabut pengumuman yang kedaluwarsa atau menyematkan pengumuman penting (*Pin to top*) melalui modul `is_pinned`. Modifikasi juga menyentuh kerangka *form input* yang kini menyediakan kotak centang (*checkbox*) untuk penentuan sematan seketika sejak pengumuman dibuat perdana.
 
+#### Poin 15: Integrasi UI Modul Ekstrakurikuler Khusus Staf
+- **File:** `src/app/(dashboard)/kesiswaan/page.tsx`
+- **Komponen/Fungsi:** Fitur Tambah & Hapus Ekskul (`handleEkskulSubmit`, `handleDeleteEkskul`), Modal UI, dan Manajemen State.
+- **Alasan Teknis:** Menyempurnakan pilar kedua dari Dasbor Kesiswaan (Bilah Sisi Kanan). Modifikasi ini melepaskan rantai ketergantungan *hard-coded* atau *database manual* bagi Staf (Guru/Admin) dengan menyediakan Modal Tambah Ekskul langsung dari UI. Elemen *card* ekskul juga disuntikkan tombol tong sampah (*hover-to-reveal trash icon*) untuk mencabut program ekskul yang tak lagi aktif secara mutlak dari PostgreSQL.
+
 ---
 
 ## [2026-07-15] - Architectural Decision Records (ADR) dari Sesi Penyelarasan `/grill-me`
