@@ -26,6 +26,11 @@ Semua perubahan (Updates, Bug Fixes, New Features) pada Dasbor AruthalaEdu akan 
 - **Komponen/Fungsi:** Konversi ke *client component*, logika *fetch* dan form unggah/tambah.
 - **Alasan Teknis:** Halaman Materi, Perpus, dan Kesiswaan sekarang terhubung ke database asli. Guru dapat menginput materi/buku/pengumuman lewat form yang disematkan secara kondisional, dan siswa dapat membaca *record* langsung dari Supabase berkat RLS.
 
+#### Poin 5: Perbaikan UI Native Select (Global)
+- **File:** `src/app/globals.css`
+- **Komponen/Fungsi:** Penambahan *rule* CSS `.modal-content` & `select option`
+- **Alasan Teknis:** Memperbaiki *bug* kilat hitam (*black flash*) pada dropdown `<select>` ketika dibuka di *browser* Windows dengan pengaturan Dark Mode. Penambahan instruksi `background-color: #ffffff !important` secara global memastikan seluruh dropdown (seperti opsi Kelas, Bulan, Tahun) berlatar belakang terang konsisten.
+
 ---
 
 ## [2026-07-15] - Architectural Decision Records (ADR) dari Sesi Penyelarasan `/grill-me`

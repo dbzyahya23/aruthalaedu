@@ -233,3 +233,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 .modal-content {
   animation: modalSlideIn 0.2s ease-out forwards;
 }
+
+/* Fix Native Select Dropdown Black Flash Issue on Windows Dark Mode */
+select option {
+  background-color: #ffffff !important;
+  color: #111827 !important; /* gray-900 */
+}
