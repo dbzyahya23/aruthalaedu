@@ -3,6 +3,31 @@ Semua perubahan (Updates, Bug Fixes, New Features) pada Dasbor AruthalaEdu akan 
 
 ---
 
+## [2026-07-20] - Integrasi Backend Layanan Sekolah & Sidebar Siswa
+### Ditambahkan & Diperbarui (Added & Updated)
+
+#### Poin 1: Modifikasi Sidebar Siswa
+- **File:** `src/components/layout/Sidebar.tsx`
+- **Komponen/Fungsi:** Array `studentSections`
+- **Alasan Teknis:** Memasukkan menu "Layanan Sekolah" ke dalam sidebar siswa sehingga siswa dapat mengakses halaman `/materi`, `/perpus`, `/kesiswaan`, dan `/absen`. Halaman ini disesuaikan dengan Role Based Access Control (RBAC) agar siswa hanya dapat melihat data miliknya sendiri atau data yang diperuntukkan bagi sekolahnya.
+
+#### Poin 2: Pembuatan Skema Database Supabase
+- **File:** `supabase/migrations/007_layanan_sekolah.sql` (dan eksekusi via Supabase Client/MCP)
+- **Komponen/Fungsi:** Pembuatan tabel baru (`attendance`, `materials`, `library_books`, `library_loans`, `announcements`, `extracurriculars`, `extracurricular_members`).
+- **Alasan Teknis:** Menggantikan *mock data* di UI buatan Denis dengan tabel nyata di Supabase. Tabel dikonfigurasi dengan *Row Level Security* (RLS) berdasarkan `sekolah_id` (multi-tenancy) dan `yayasan_id` untuk memastikan isolasi dan keamanan data antar sekolah.
+
+#### Poin 3: Integrasi UI Halaman Absen
+- **File:** `src/app/(dashboard)/absen/page.tsx` & `src/app/(dashboard)/data-absen/page.tsx`
+- **Komponen/Fungsi:** Konversi ke *client component*, penggunaan `createClient` Supabase, integrasi `useDashboardIdentity`.
+- **Alasan Teknis:** `/absen` dimodifikasi agar menampilkan absensi khusus untuk siswa yang login, dan menampilkan form input (modal) absensi khusus untuk Admin/Guru. `/data-absen` disempurnakan dengan *fetch* asli dari tabel `attendance` dengan filter kelas dan bulan/tahun, menggantikan perhitungan *mock*.
+
+#### Poin 4: Integrasi UI Materi, Perpus, dan Kesiswaan
+- **File:** `src/app/(dashboard)/materi/page.tsx`, `src/app/(dashboard)/perpus/page.tsx`, `src/app/(dashboard)/kesiswaan/page.tsx`
+- **Komponen/Fungsi:** Konversi ke *client component*, logika *fetch* dan form unggah/tambah.
+- **Alasan Teknis:** Halaman Materi, Perpus, dan Kesiswaan sekarang terhubung ke database asli. Guru dapat menginput materi/buku/pengumuman lewat form yang disematkan secara kondisional, dan siswa dapat membaca *record* langsung dari Supabase berkat RLS.
+
+---
+
 ## [2026-07-15] - Architectural Decision Records (ADR) dari Sesi Penyelarasan `/grill-me`
 ### Keputusan Arsitektur & Logika Bisnis Sistem pasca-Publikasi (*Live Release Standard*)
 - **ADR-001 (Manajemen Multi-Sekolah / Onboarding Tenant):** Menerapkan model **Centralized Onboarding**. Hanya Super Admin di *Admin Hub* (`/admin-hub`) yang memiliki otorisasi untuk mendaftarkan institusi sekolah baru beserta akun Kepala Sekolah. Pendaftaran mandiri (*self-service*) dinonaktifkan demi menjamin keamanan data, validasi lisensi instansi, dan mencegah pembuatan tenant palsu.

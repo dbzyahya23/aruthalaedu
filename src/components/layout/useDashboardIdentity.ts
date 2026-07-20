@@ -14,7 +14,9 @@ export interface DashboardIdentity {
   fullName: string;
   email: string;
   nisn?: string;
+  userId?: string;
   sekolahId?: string;
+  yayasanId?: string;
   sekolahName?: string;
 }
 
@@ -87,7 +89,9 @@ export function useDashboardIdentity() {
               fullName: parsed.full_name || "Siswa",
               email: `${parsed.nisn || "siswa"}@sekolah.id`,
               nisn: parsed.nisn,
+              userId: parsed.id || parsed.siswa_id,
               sekolahId: parsed.sekolah_id,
+              yayasanId: parsed.yayasan_id,
               sekolahName: resolvedSchool,
             });
             return;
@@ -138,7 +142,9 @@ export function useDashboardIdentity() {
               fullName,
               email: user.email ?? "",
               nisn: profile?.nisn,
+              userId: user.id,
               sekolahId: profile?.sekolah_id,
+              yayasanId: user.app_metadata?.yayasan_id || undefined,
               sekolahName,
             });
           }

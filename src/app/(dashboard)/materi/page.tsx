@@ -1,62 +1,236 @@
-import { FileText, Download, Search } from "lucide-react";
+"use client";
 
-export default function FileMateriPage() {
-  const mockMateri = [
-    { id: 1, title: "Modul Matematika Wajib Bab 1", subject: "Matematika", type: "PDF", size: "2.4 MB", date: "20 Jul 2026", color: "bg-red-50 text-red-600" },
-    { id: 2, title: "Slide Presentasi Fisika Kuantum", subject: "Fisika", type: "PPTX", size: "5.1 MB", date: "18 Jul 2026", color: "bg-orange-50 text-orange-600" },
-    { id: 3, title: "Latihan Soal Bahasa Inggris", subject: "Bahasa Inggris", type: "DOCX", size: "1.1 MB", date: "15 Jul 2026", color: "bg-blue-50 text-blue-600" },
-    { id: 4, title: "Rangkuman Sejarah Kemerdekaan", subject: "Sejarah", type: "PDF", size: "3.8 MB", date: "10 Jul 2026", color: "bg-red-50 text-red-600" },
-  ];
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { FileText, Search, Upload, X, Loader2, Download, File } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useDashboardIdentity } from "@/components/layout/useDashboardIdentity";
+
+type Material = {
+  id: string;
+  title: string;
+  description: string | null;
+  mata_pelajaran: string | null;
+  file_url: string;
+  file_type: string;
+  file_size_bytes: number | null;
+  created_at: string;
+  uploader_name?: string;
+};
+
+const FILE_TYPE_COLORS: Record<string, string> = {
+  PDF: "bg-red-50 text-red-600 border-red-200",
+  PPTX: "bg-orange-50 text-orange-600 border-orange-200",
+  DOCX: "bg-blue-50 text-blue-600 border-blue-200",
+  XLSX: "bg-green-50 text-green-600 border-green-200",
+  default: "bg-gray-50 text-gray-600 border-gray-200",
+};
+
+function formatBytes(bytes: number | null) {
+  if (!bytes) return "-";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+export default function MateriPage() {
+  const identity = useDashboardIdentity();
+  const isStaff = ["admin", "teacher"].includes(identity.roleGroup);
+  const supabase = createClient();
+
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filterMapel, setFilterMapel] = useState("");
+
+  // Upload form state
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadForm, setUploadForm] = useState({ title: "", description: "", mata_pelajaran: "", file_type: "PDF" });
+  const [saving, setSaving] = useState(false);
+
+  const fetchMaterials = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("materials")
+      .select("id, title, description, mata_pelajaran, file_url, file_type, file_size_bytes, created_at, profiles!materials_uploaded_by_fkey(full_name)")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Fetch materials error:", error);
+      setMaterials([]);
+    } else {
+      setMaterials(
+        (data || []).map((d: Record<string, unknown>) => ({
+          ...d,
+          uploader_name: (d.profiles as Record<string, string>)?.full_name || "Guru",
+        })) as Material[]
+      );
+    }
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!identity.loading) fetchMaterials();
+  }, [fetchMaterials, identity.loading]);
+
+  // Unique mata pelajaran for filter dropdown
+  const mapelOptions = useMemo(() => {
+    const set = new Set(materials.map((m) => m.mata_pelajaran).filter(Boolean) as string[]);
+    return Array.from(set).sort();
+  }, [materials]);
+
+  const filtered = useMemo(() => {
+    let result = materials;
+    if (filterMapel) result = result.filter((m) => m.mata_pelajaran === filterMapel);
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((m) => m.title.toLowerCase().includes(q) || (m.mata_pelajaran || "").toLowerCase().includes(q));
+    }
+    return result;
+  }, [materials, search, filterMapel]);
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadForm.title) return;
+    setSaving(true);
+
+    // For now, create material record with a placeholder URL
+    // Full file upload would use Supabase Storage
+    const { error } = await supabase.from("materials").insert({
+      title: uploadForm.title,
+      description: uploadForm.description || null,
+      mata_pelajaran: uploadForm.mata_pelajaran || null,
+      file_url: "#", // placeholder — would be replaced with Storage URL
+      file_type: uploadForm.file_type,
+      file_size_bytes: 0,
+      uploaded_by: identity.userId,
+      sekolah_id: identity.sekolahId,
+      yayasan_id: identity.yayasanId,
+      is_published: true,
+    });
+
+    setSaving(false);
+    if (error) {
+      alert("Gagal mengupload: " + error.message);
+    } else {
+      setShowUpload(false);
+      setUploadForm({ title: "", description: "", mata_pelajaran: "", file_type: "PDF" });
+      fetchMaterials();
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div className="card card-padding flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      {/* Header */}
+      <div className="card card-padding flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef5ff] text-[#2f66e9]">
             <FileText className="h-6 w-6" />
           </div>
           <div>
             <h1 className="page-title">File Materi</h1>
-            <p className="page-subtitle">Kumpulan file materi pelajaran dan dokumen sekolah.</p>
+            <p className="page-subtitle">Kumpulan materi pembelajaran yang dibagikan oleh guru.</p>
           </div>
         </div>
-
-        <div className="relative w-full lg:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Cari materi..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f66e9]/20 focus:border-[#2f66e9] transition-all"
-          />
+        <div className="flex items-center gap-2">
+          <select value={filterMapel} onChange={(e) => setFilterMapel(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-[#2f66e9]/20">
+            <option value="">Semua Mapel</option>
+            {mapelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          {isStaff && (
+            <button onClick={() => setShowUpload(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2f66e9] text-white text-sm font-semibold hover:bg-[#2558d4] transition-colors shadow-lg shadow-[#2f66e9]/20">
+              <Upload className="w-4 h-4" /> Upload Materi
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {mockMateri.map((materi) => (
-          <div key={materi.id} className="card bg-white p-5 rounded-2xl border border-gray-100 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all flex flex-col justify-between">
-            <div className="flex items-start gap-4">
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${materi.color}`}>
-                {materi.type}
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input type="text" placeholder="Cari materi..." value={search} onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20 focus:border-[#2f66e9] transition-all" />
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-[#2f66e9]" />
+          <span className="ml-2 text-sm text-gray-500">Memuat materi...</span>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-20">
+          <File className="mx-auto h-14 w-14 text-gray-300 mb-3" />
+          <p className="text-sm text-gray-500">Belum ada materi untuk ditampilkan.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((m) => (
+            <div key={m.id} className="card card-padding hover:shadow-lg transition-shadow">
+              <div className="flex items-start justify-between mb-3">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${FILE_TYPE_COLORS[m.file_type.toUpperCase()] || FILE_TYPE_COLORS.default}`}>
+                  {m.file_type.toUpperCase()}
+                </span>
+                <span className="text-xs text-gray-400">{formatBytes(m.file_size_bytes)}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-gray-900 truncate">{materi.title}</h3>
-                <p className="text-xs text-gray-500 mt-1">{materi.subject}</p>
-                <div className="flex items-center gap-2 mt-2 text-[11px] font-medium text-gray-400">
-                  <span>{materi.size}</span>
-                  <span className="w-1 h-1 rounded-full bg-gray-300" />
-                  <span>{materi.date}</span>
-                </div>
+              <h3 className="text-sm font-bold text-gray-900 mb-1 line-clamp-2">{m.title}</h3>
+              {m.mata_pelajaran && <p className="text-xs text-[#2f66e9] font-medium mb-2">{m.mata_pelajaran}</p>}
+              {m.description && <p className="text-xs text-gray-500 mb-3 line-clamp-2">{m.description}</p>}
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-[10px] text-gray-400">{new Date(m.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+                <a href={m.file_url !== "#" ? m.file_url : undefined}
+                  className={`flex items-center gap-1 text-xs font-semibold ${m.file_url !== "#" ? "text-[#2f66e9] hover:underline" : "text-gray-400 cursor-not-allowed"}`}
+                  target="_blank" rel="noopener noreferrer">
+                  <Download className="w-3.5 h-3.5" /> Unduh File
+                </a>
               </div>
             </div>
-            <div className="mt-5 pt-4 border-t border-gray-50">
-              <button className="w-full py-2.5 rounded-xl bg-[#f8fbff] text-[#2f66e9] hover:bg-[#eef5ff] text-xs font-bold transition-colors flex items-center justify-center gap-2">
-                <Download className="w-4 h-4" />
-                Unduh File
+          ))}
+        </div>
+      )}
+
+      {/* Upload Modal */}
+      {showUpload && isStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Upload Materi Baru</h3>
+              <button onClick={() => setShowUpload(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleUpload} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Judul Materi</label>
+                <input type="text" value={uploadForm.title} onChange={(e) => setUploadForm(p => ({ ...p, title: e.target.value }))} required
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20" placeholder="Contoh: Modul Matematika Bab 1" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Mata Pelajaran</label>
+                <input type="text" value={uploadForm.mata_pelajaran} onChange={(e) => setUploadForm(p => ({ ...p, mata_pelajaran: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20" placeholder="Contoh: Matematika Wajib" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tipe File</label>
+                <select value={uploadForm.file_type} onChange={(e) => setUploadForm(p => ({ ...p, file_type: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20">
+                  {["PDF", "PPTX", "DOCX", "XLSX"].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Deskripsi</label>
+                <input type="text" value={uploadForm.description} onChange={(e) => setUploadForm(p => ({ ...p, description: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20" placeholder="Opsional" />
+              </div>
+              <button type="submit" disabled={saving}
+                className="w-full py-2.5 rounded-xl bg-[#2f66e9] text-white text-sm font-semibold hover:bg-[#2558d4] transition-colors disabled:opacity-50 shadow-lg shadow-[#2f66e9]/20">
+                {saving ? "Mengupload..." : "Upload Materi"}
               </button>
-            </div>
+            </form>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

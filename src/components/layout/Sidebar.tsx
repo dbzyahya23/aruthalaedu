@@ -77,12 +77,22 @@ const studentSections: NavSection[] = [
     ],
   },
   {
+    label: "Layanan Sekolah",
+    items: [
+      { href: "/materi", label: "File Materi", icon: FileText },
+      { href: "/perpus", label: "Perpustakaan", icon: Library },
+      { href: "/kesiswaan", label: "Kesiswaan", icon: Users },
+      { href: "/absen", label: "Data Absen Saya", icon: CalendarCheck },
+    ],
+  },
+  {
     label: "Akademik & Ujian",
     items: [
       { href: "/schedule", label: "Jadwal Ujian", icon: CalendarDays },
       { href: "/leaderboard", label: "Leaderboard", icon: BarChart2 },
     ],
   },
+
 ];
 
 const teacherSections: NavSection[] = [
