@@ -92,6 +92,11 @@ Semua perubahan (Updates, Bug Fixes, New Features) pada Dasbor AruthalaEdu akan 
 - **Komponen/Fungsi:** Fungsi `handleDelete` dan Ikon Aksi Antarmuka.
 - **Alasan Teknis:** Menyuntikkan fungsionalitas CRUD secara utuh bagi pengguna bertipe *Staff* (Admin/Guru). Fungsi ini melakukan operasi sapu bersih ganda: membongkar dan menghapus pangkalan berkas (*file object*) fisik dari Supabase Storage `aruthala-materials` berdasarkan pemotongan URL, dilanjutkan dengan penghapusan baris data pada tabel PostgreSQL `materials`. Ikon tempat sampah diintegrasikan pada kartu, di samping tombol unduh publik.
 
+#### Poin 14: Fitur CRUD Mutlak Pusat Pengumuman (Kesiswaan)
+- **File:** `src/app/(dashboard)/kesiswaan/page.tsx`
+- **Komponen/Fungsi:** Fitur Hapus (`handleDeleteAnnouncement`) dan Sematkan/Pin (`handleTogglePin`).
+- **Alasan Teknis:** Melengkapi fungsionalitas CRUD Dasbor Kesiswaan khusus staf pendidik. Pengguna kini memiliki wewenang untuk mencabut pengumuman yang kedaluwarsa atau menyematkan pengumuman penting (*Pin to top*) melalui modul `is_pinned`. Modifikasi juga menyentuh kerangka *form input* yang kini menyediakan kotak centang (*checkbox*) untuk penentuan sematan seketika sejak pengumuman dibuat perdana.
+
 ---
 
 ## [2026-07-15] - Architectural Decision Records (ADR) dari Sesi Penyelarasan `/grill-me`

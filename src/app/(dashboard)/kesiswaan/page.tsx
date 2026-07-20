@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Users, Megaphone, Calendar, Trophy, Loader2, Plus, X } from "lucide-react";
+import { Users, Megaphone, Calendar, Trophy, Loader2, Plus, X, Trash2, Pin, PinOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDashboardIdentity } from "@/components/layout/useDashboardIdentity";
 
@@ -42,7 +42,7 @@ export default function KesiswaanPage() {
 
   // Form for new announcement (staff only)
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", content: "", type: "Pengumuman" });
+  const [form, setForm] = useState({ title: "", content: "", type: "Pengumuman", is_pinned: false });
   const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -88,6 +88,19 @@ export default function KesiswaanPage() {
     if (!identity.loading) fetchData();
   }, [fetchData, identity.loading]);
 
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus pengumuman ini?")) return;
+    const { error } = await supabase.from("announcements").delete().eq("id", id);
+    if (error) alert("Gagal menghapus: " + error.message);
+    else fetchData();
+  };
+
+  const handleTogglePin = async (id: string, currentStatus: boolean) => {
+    const { error } = await supabase.from("announcements").update({ is_pinned: !currentStatus }).eq("id", id);
+    if (error) alert("Gagal menyematkan: " + error.message);
+    else fetchData();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title) return;
@@ -97,6 +110,7 @@ export default function KesiswaanPage() {
       title: form.title,
       content: form.content || null,
       type: form.type,
+      is_pinned: form.is_pinned,
       sekolah_id: identity.sekolahId,
       yayasan_id: identity.yayasanId,
       created_by: identity.userId,
@@ -108,7 +122,7 @@ export default function KesiswaanPage() {
       alert("Gagal membuat pengumuman: " + error.message);
     } else {
       setShowForm(false);
-      setForm({ title: "", content: "", type: "Pengumuman" });
+      setForm({ title: "", content: "", type: "Pengumuman", is_pinned: false });
       fetchData();
     }
   };
@@ -170,6 +184,18 @@ export default function KesiswaanPage() {
                         <span className="text-[10px] text-gray-400 ml-auto">
                           {new Date(ann.published_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                         </span>
+                        
+                        {/* Action Buttons */}
+                        {isStaff && (
+                          <div className="flex items-center gap-2 ml-2 border-l pl-2 border-gray-200">
+                            <button onClick={() => handleTogglePin(ann.id, ann.is_pinned)} className="text-gray-400 hover:text-amber-500 transition-colors" title={ann.is_pinned ? "Lepas Sematan" : "Sematkan"}>
+                              {ann.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                            </button>
+                            <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-gray-400 hover:text-red-500 transition-colors" title="Hapus">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <h3 className="text-sm font-bold text-gray-900">{ann.title}</h3>
                       {ann.content && <p className="text-xs text-gray-500 mt-1 line-clamp-3">{ann.content}</p>}
@@ -228,6 +254,10 @@ export default function KesiswaanPage() {
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5">Isi Pengumuman</label>
                 <textarea value={form.content} onChange={(e) => setForm(p => ({ ...p, content: e.target.value }))} rows={4}
                   className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-[#2f66e9]/20 resize-none" placeholder="Opsional" />
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <input type="checkbox" id="pin-checkbox" checked={form.is_pinned} onChange={(e) => setForm(p => ({ ...p, is_pinned: e.target.checked }))} className="w-4 h-4 rounded text-[#2f66e9] focus:ring-[#2f66e9]" />
+                <label htmlFor="pin-checkbox" className="text-sm font-medium text-gray-700 cursor-pointer">Sematkan pengumuman (Tampil di paling atas)</label>
               </div>
               <button type="submit" disabled={saving}
                 className="w-full py-2.5 rounded-xl bg-[#2f66e9] text-white text-sm font-semibold hover:bg-[#2558d4] transition-colors disabled:opacity-50 shadow-lg shadow-[#2f66e9]/20">
