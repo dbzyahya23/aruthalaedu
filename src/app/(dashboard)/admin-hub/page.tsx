@@ -224,7 +224,12 @@ export default function AdminHubPage() {
       setSekolahList(prev => [...prev, { id: data.id, name: data.name }].sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err: any) {
       console.error("Gagal mendaftarkan sekolah:", err);
-      setSchoolError(err.message || "Gagal mendaftarkan sekolah.");
+      // Mencegat error unique constraint dari PostgreSQL (Supabase / PostgREST)
+      if (err.code === '23505' || err.message?.includes('duplicate key value')) {
+        setSchoolError("Pendaftaran gagal: Sekolah dengan Kode (Slug) tersebut sudah terdaftar. Silakan gunakan kode yang berbeda.");
+      } else {
+        setSchoolError(err.message || "Gagal mendaftarkan sekolah.");
+      }
     } finally {
       setRegisteringSchool(false);
     }

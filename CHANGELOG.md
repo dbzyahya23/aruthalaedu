@@ -112,6 +112,11 @@ Semua perubahan (Updates, Bug Fixes, New Features) pada Dasbor AruthalaEdu akan 
 - **Komponen/Fungsi:** Modifikasi *dependency array* pada hook `useEffect` saat memuat tabel profil.
 - **Alasan Teknis:** Terdapat *race condition* minor di mana fungsionalitas `loadProfiles()` berjalan sepersekian detik mendahului status autentikasi sekolah (`sekolah_id`), yang menyebabkan seluruh profil pengguna global seolah-olah terekspos (*flicker*) sesaat sebelum akhirnya tersaring. Penyuntikan proteksi kondisional `if (!loadingUser)` memastikan modul profil menahan proses tarikan basis data (*fetch*) sampai penarikan kredensial identitas pengguna benar-benar paripurna.
 
+#### Poin 18: Translasi Error "Unique Constraint" di Admin Hub
+- **File:** `src/app/(dashboard)/admin-hub/page.tsx`
+- **Komponen/Fungsi:** Blok tangkapan galat (*catch block*) pada fungsi pendaftaran sekolah (`handleRegisterSchool`).
+- **Alasan Teknis:** Sebelumnya, jika admin memasukkan slug sekolah yang sudah terpakai di sistem, basis data PostgreSQL akan melemparkan kode galat mentah (error 23505: `duplicate key value violates unique constraint`) langsung ke UI yang dapat membingungkan pengguna non-teknis. Kode ini kini ditangkap secara spesifik dan ditranslasikan menjadi pesan peringatan UI yang lebih bersahabat ("Sekolah dengan Kode/Slug tersebut sudah terdaftar...").
+
 ---
 
 ## [2026-07-15] - Architectural Decision Records (ADR) dari Sesi Penyelarasan `/grill-me`
